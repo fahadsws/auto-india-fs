@@ -15,6 +15,13 @@ class AiClient
 {
     /** Why the last call failed (shown in automation logs so a broken provider is obvious). */
     private static ?string $lastError = null;
+    /** Token usage reported by the provider for the last successful call: ['in'=>int,'out'=>int]. */
+    private static array $lastUsage = ['in' => 0, 'out' => 0];
+
+    public static function lastUsage(): array
+    {
+        return self::$lastUsage;
+    }
 
     public static function lastError(): ?string
     {
@@ -41,6 +48,7 @@ class AiClient
     public static function chat(array $messages, array $opts = []): ?string
     {
         self::$lastError = null;
+        self::$lastUsage = ['in' => 0, 'out' => 0];
         if (! self::configured()) { self::$lastError = 'AI provider is not configured'; return null; }
 
         $base = self::baseUrl();
@@ -63,7 +71,10 @@ class AiClient
 
                 if ($res->successful()) {
                     $text = data_get($res->json(), 'choices.0.message.content');
-                    if (is_string($text) && trim($text) !== '') return trim($text);
+                    if (is_string($text) && trim($text) !== '') {
+                        self::$lastUsage = ['in' => (int) data_get($res->json(), 'usage.prompt_tokens', 0), 'out' => (int) data_get($res->json(), 'usage.completion_tokens', 0)];
+                        return trim($text);
+                    }
                     self::$lastError = "{$model}: empty response".(($fr = data_get($res->json(), 'choices.0.finish_reason')) ? " (finish_reason: $fr)" : '');
                 } else {
                     self::$lastError = "{$model}: HTTP ".$res->status().' '.substr(preg_replace('/\s+/', ' ', $res->body()), 0, 200);

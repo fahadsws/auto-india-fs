@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role' => RoleMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'assistant.session' => \App\Http\Middleware\EnsureAssistantSession::class,
         ]);
         $middleware->redirectGuestsTo(fn () => route('admin.login'));
         // The cron route is hit by external pingers; it is protected by its secret token.

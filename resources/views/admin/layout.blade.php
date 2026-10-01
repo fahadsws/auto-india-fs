@@ -91,6 +91,10 @@
         <li class="menu-item {{ $on('admin.leads.*') }}"><a href="{{ route('admin.leads.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-messages"></i><div>Leads & enquiries</div>@if($newLeads)<div class="badge bg-danger rounded-pill ms-auto">{{ $newLeads }}</div>@endif</a></li>
         @endcan
 
+        @can('assistant.manage')
+        <li class="menu-item {{ $on('admin.assistant.*') }}"><a href="{{ route('admin.assistant.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-sparkles"></i><div>AI chats & usage</div></a></li>
+        @endcan
+
         @canany(['automation.manage', 'settings.manage'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">AI & Automation</span></li>
         @endcanany
