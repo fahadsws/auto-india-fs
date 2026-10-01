@@ -62,3 +62,9 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 ## Notes
 - Existing tests need MySQL (one migration uses MySQL-only FULLTEXT); they fail on the default sqlite config.
 - The dealer, brochure, colours and service chips only prompt the AI because the site has no dealer or brochure data.
+
+## Design update: 3D bubble and reference-style forms
+- The orb (floating button, greeting, lead and OTP steps) is now a 3D glass bubble: translucent blue body, top-left specular highlight, bright rim, soft bottom glow, and a twinkling 4-point sparkle with a small second star.
+- Form buttons follow the feedback reference: solid black full-width buttons, rounded-square tool and star buttons, light grey radio rows with a small hollow circle, light grey inputs, and a soft white-to-grey panel.
+- The chat box is shorter (620 px instead of 740 px, 390 px wide; expanded view is capped at 760 px). The greeting, promo strip and form spacing were tightened so the lead form and the chat input fit without clipping. Mobile still opens full screen.
+- Files: `public/css/assistant.css`, `resources/views/site/partials/assistant.blade.php`.

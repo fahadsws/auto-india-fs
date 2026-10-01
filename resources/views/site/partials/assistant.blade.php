@@ -25,7 +25,7 @@
   @if ($mode === 'float')
     <button class="aw-fab" id="agFab" type="button" aria-label="Chat with {{ $asstName }}">
       <span class="aw-fab-ring"></span><span class="aw-fab-ring r2"></span>
-      <span class="aw-orb aw-orb-sm"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/><path d="M19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z"/></svg></span>
+      <span class="aw-orb aw-orb-sm"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 3c.7 5.4 2.8 7.5 8.2 8.2-5.4.7-7.5 2.8-8.2 8.2-.7-5.4-2.8-7.5-8.2-8.2C12.2 10.5 14.3 8.4 15 3z"/><path class="s2" d="M7.4 17.6c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/></svg></span>
       <span class="aw-tip" id="agTip">Ask {{ $asstName }} ✨</span>
     </button>
   @endif
@@ -43,11 +43,11 @@
       </div>
 
       {{-- loading --}}
-      <div class="aw-view show" id="vLoad"><div class="aw-orb"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></div></div>
+      <div class="aw-view show" id="vLoad"><div class="aw-orb"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 3c.7 5.4 2.8 7.5 8.2 8.2-5.4.7-7.5 2.8-8.2 8.2-.7-5.4-2.8-7.5-8.2-8.2C12.2 10.5 14.3 8.4 15 3z"/><path class="s2" d="M7.4 17.6c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/></svg></div></div>
 
       {{-- step 1: lead form --}}
       <form class="aw-view aw-form" id="vLead" novalidate autocomplete="on">
-        <div class="aw-orb aw-orb-md"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></div>
+        <div class="aw-orb aw-orb-md"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 3c.7 5.4 2.8 7.5 8.2 8.2-5.4.7-7.5 2.8-8.2 8.2-.7-5.4-2.8-7.5-8.2-8.2C12.2 10.5 14.3 8.4 15 3z"/><path class="s2" d="M7.4 17.6c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/></svg></div>
         <h3>Welcome! Let's get acquainted</h3>
         <p class="aw-sub">Share a few details and {{ $asstName }} will be ready to help — prices, comparisons, test drives &amp; more.</p>
         <label class="aw-f"><span>Full name</span><input name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rahul Sharma" required></label>
@@ -62,7 +62,7 @@
 
       {{-- step 2: OTP --}}
       <form class="aw-view aw-form" id="vOtp" novalidate>
-        <div class="aw-orb aw-orb-md"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></div>
+        <div class="aw-orb aw-orb-md"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 3c.7 5.4 2.8 7.5 8.2 8.2-5.4.7-7.5 2.8-8.2 8.2-.7-5.4-2.8-7.5-8.2-8.2C12.2 10.5 14.3 8.4 15 3z"/><path class="s2" d="M7.4 17.6c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/></svg></div>
         <h3>Check your email</h3>
         <p class="aw-sub">We sent a 6-digit code to <b id="otpMail"></b>.</p>
         <div class="aw-otp" id="otpBoxes">@for ($i = 0; $i < 6; $i++)<input inputmode="numeric" maxlength="1" autocomplete="{{ $i ? 'off' : 'one-time-code' }}" aria-label="Digit {{ $i + 1 }}">@endfor</div>
@@ -75,7 +75,7 @@
       <div class="aw-view aw-chat" id="vChat">
         <div class="aw-scroll" id="agMsgs">
           <div class="aw-hero" id="agHero">
-            <div class="aw-orb"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 24 24"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/><path d="M19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z"/></svg></div>
+            <div class="aw-orb"><i class="aw-orb-g"></i><svg class="aw-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 3c.7 5.4 2.8 7.5 8.2 8.2-5.4.7-7.5 2.8-8.2 8.2-.7-5.4-2.8-7.5-8.2-8.2C12.2 10.5 14.3 8.4 15 3z"/><path class="s2" d="M7.4 17.6c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/></svg></div>
             <h3 id="agHello">Hello there!</h3>
             <p class="aw-sub">{{ $greeting }}</p>
             <div class="aw-promo" id="agPromo" aria-label="Highlights">
