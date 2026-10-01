@@ -135,7 +135,7 @@ class SiteData
         return ['context' => implode("\n\n", $parts), 'links' => $links, 'sources' => $sources, 'found' => $found, 'items' => $items, 'lines' => $lines, 'totals' => $totals, 'desc' => $desc];
     }
 
-    private const NAME_SKIP = ['ki', 'ke', 'ka', 'ko', 'mein', 'me', 'for', 'the', 'and', 'price', 'news', 'review', 'reviews', 'car', 'cars', 'suv', 'electric', 'petrol', 'diesel', 'new', 'used', 'test', 'drive', 'details', 'detail', 'information', 'info', 'share', 'bata', 'batao', 'dikhao', 'kya', 'hai', 'baare', 'about', 'page', 'link', 'mujhe', 'muje', 'chahiye', 'under', 'lakh', 'launch', 'launched', 'upcoming', 'offers', 'emi', 'loan', 'finance', 'models', 'model', 'variant', 'variants', 'mileage', 'specs', 'features', 'colours', 'colors', 'wali', 'wala', 'iski', 'iske', 'iska', 'koi', 'kuch', 'aur', 'dena', 'chahie', 'chaiye', 'kitna', 'kitni', 'available', 'latest', 'stock', 'show', 'tell', 'give', 'want', 'need', 'looking', 'from'];
+    private const NAME_SKIP = ['ki', 'ke', 'ka', 'ko', 'mein', 'me', 'for', 'the', 'and', 'price', 'news', 'review', 'reviews', 'car', 'cars', 'suv', 'electric', 'petrol', 'diesel', 'new', 'used', 'test', 'drive', 'details', 'detail', 'information', 'info', 'share', 'bata', 'batao', 'dikhao', 'kya', 'hai', 'baare', 'about', 'page', 'link', 'mujhe', 'muje', 'chahiye', 'under', 'lakh', 'launch', 'launched', 'upcoming', 'offers', 'emi', 'loan', 'finance', 'models', 'model', 'variant', 'variants', 'mileage', 'specs', 'features', 'colours', 'colors', 'wali', 'wala', 'iski', 'iske', 'iska', 'koi', 'kuch', 'aur', 'dena', 'chahie', 'chaiye', 'kitna', 'kitni', 'available', 'latest', 'stock', 'show', 'tell', 'give', 'want', 'need', 'looking', 'from', 'motors', 'motor', 'group', 'company', 'brand', 'showroom', 'dealer', 'dealership', 'hybrid', 'truck', 'trucks', 'bike', 'bikes', 'se', 'par', 'pe', 'ne', 'ya', 'or', 'with', 'vs', 'versus', 'bhi', 'toh', 'kaisi', 'kaisa', 'kaise', 'konsi', 'kaunsi', 'which', 'what', 'how', 'can', 'will', 'does', 'was', 'are', 'compare', 'comparison', 'difference', 'better', 'best', 'between', 'bare', 'baare', 'bareme', 'bhai', 'sir', 'madam', 'please', 'plz', 'ek', 'do', 'ye', 'yeh', 'wo', 'woh', 'iska', 'uska', 'ki', 'ke', 'ka'];
 
     /** Skeleton of a name for sound-alike matching: no vowels / y / w, doubles collapsed. "sierra", "syria", "सीरिया" -> "sr". */
     private static function skeleton(string $w): string
@@ -155,13 +155,15 @@ class SiteData
 
     /**
      * Voice / typing often garbles a model name ("Tata Syria", "टाटा सीरिया" for Sierra). The word right after a brand is matched
-     * against that brand's own models by sound; only then is it corrected. @return array{0:string,1:array<string,string>} text, [wrote => meant]
+     * against that brand's own models by sound; only then is it corrected.
+     * @return array{0:string,1:array<string,string>,2:array<string,string>} text, [wrote => meant], [unknown word => brand]  (the last: a word right after a
+     *         brand that is not one of its models and matches none - e.g. "Tata Iris" when we have no Iris; the AI must not describe it from memory)
      */
     public static function correctModelNames(string $norm): array
     {
-        if (! preg_match_all('/[\p{L}\p{M}\p{N}]+/u', $norm, $mm, PREG_OFFSET_CAPTURE) || count($mm[0]) < 2) return [$norm, []];
+        if (! preg_match_all('/[\p{L}\p{M}\p{N}]+/u', $norm, $mm, PREG_OFFSET_CAPTURE) || count($mm[0]) < 2) return [$norm, [], []];
         $tokens = $mm[0];
-        $fixes = [];
+        $fixes = []; $unknown = [];
         foreach (self::brands() as $id => $brand) {
             $key = Str::lower(Str::before($brand, ' '));
             foreach ($tokens as $i => [$tok]) {
@@ -178,16 +180,17 @@ class SiteData
                     $best = null; $bestD = 99;
                     foreach ($models as $mt) {
                         $d = levenshtein($lat, $mt);
-                        $same = self::skeleton($lat) === self::skeleton($mt) && $lat[0] === $mt[0];
+                        $same = self::skeleton($lat) === self::skeleton($mt) && ($lat[0] === $mt[0] || $d <= 2);
                         $close = ! HindiText::has($cand) && $d <= (mb_strlen($mt) >= 6 ? 2 : 1);
                         if (($same || $close) && $d < $bestD) { $best = $mt; $bestD = $d; }
                     }
                     if ($best) { $fixes[$cand] = Str::title($best); }
+                    elseif ($j === $i + 1 && mb_strlen($cand) >= 4 && ! ctype_digit($cand)) $unknown[$cand] = $brand;
                 }
             }
         }
         foreach ($fixes as $wrote => $meant) $norm = preg_replace('/(?<![\p{L}\p{M}])'.preg_quote($wrote, '/').'(?![\p{L}\p{M}])/u', $meant, $norm);
-        return [$norm, $fixes];
+        return [$norm, $fixes, $unknown];
     }
 
     /**
@@ -225,7 +228,7 @@ class SiteData
             .'. '.Str::limit((string) ($k['content'] ?? ''), 900, '…').($used->isNotEmpty() ? ' | Used '.$car->name.' in our stock: '.$used->count().', from '.$used->first()->price_label : '');
     }
 
-    private const CONTENT_STOP = ['news', 'latest', 'new', 'newest', 'recent', 'today', 'khabar', 'khabrein', 'samachar', 'article', 'articles', 'video', 'videos', 'review', 'reviews', 'show', 'tell', 'about', 'dikhao', 'batao', 'bataiye', 'dikha', 'cars', 'car', 'gaadi', 'gadi', 'mujhe', 'muje', 'kuch', 'koi', 'abhi', 'headlines', 'from', 'your', 'site', 'website', 'give', 'want', 'need', 'please', 'any', 'the', 'and', 'for', 'with', 'what', 'whats', 'have', 'you'];
+    private const CONTENT_STOP = ['news', 'latest', 'new', 'newest', 'recent', 'today', 'khabar', 'khabrein', 'samachar', 'article', 'articles', 'video', 'videos', 'review', 'reviews', 'show', 'tell', 'about', 'dikhao', 'batao', 'bataiye', 'dikha', 'cars', 'car', 'gaadi', 'gadi', 'mujhe', 'muje', 'kuch', 'koi', 'abhi', 'headlines', 'from', 'your', 'site', 'website', 'give', 'want', 'need', 'please', 'any', 'the', 'and', 'for', 'with', 'what', 'whats', 'have', 'you', 'badi', 'bada', 'bade', 'taza', 'taaza', 'naya', 'nayi', 'nai', 'sabse', 'important', 'khas', 'khaas', 'special', 'aaj', 'industry', 'automobile', 'automotive', 'auto', 'market', 'india', 'indian', 'top', 'big', 'breaking', 'happening', 'going', 'trending', 'headline', 'update', 'updates', 'automobil', 'world', 'about', 'something', 'interesting', 'sab', 'saare', 'sari', 'all', 'general', 'overall', 'kya', 'hai', 'hain', 'chal', 'raha', 'rahi', 'ki', 'ke', 'ka', 'ko', 'mein', 'me'];
 
     public static function newsIntent(string $t): bool
     {

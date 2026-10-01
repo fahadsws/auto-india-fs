@@ -751,6 +751,75 @@ class AssistantTest extends TestCase
         $this->assertNotSame('navigate', $o->json('actions.0.type'));
     }
 
+    public function test_general_industry_news_request_shows_the_latest_articles_not_a_no_news_answer(): void
+    {
+        \App\Models\Article::create(['title' => 'Honda Elevate Facelift Pre-Bookings Begin', 'slug' => 'elevate', 'excerpt' => 'x', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHour()]);
+        \App\Models\Article::create(['title' => 'Jetour T2 Facelift Debuts Globally', 'slug' => 'jetour', 'excerpt' => 'x', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHours(2)]);
+        $token = $this->verified();
+        $this->fakeAi();
+        foreach (['I want the latest news for the car industry', 'latest automobile news today india', 'koi badi khabar batao'] as $q) {
+            $r = $this->chat($token, $q)->assertOk();
+            $this->assertEqualsCanonicalizing(['Honda Elevate Facelift Pre-Bookings Begin', 'Jetour T2 Facelift Debuts Globally'], collect($r->json('links'))->pluck('title')->all(), $q);
+            $this->assertStringNotContainsString('No news articles on our site match', $this->aiPayload());
+        }
+    }
+
+    public function test_a_misheard_second_model_is_corrected_and_an_unknown_one_is_never_described_from_memory(): void
+    {
+        $this->tataCatalog();
+        $token = $this->verified();
+        $this->aiText = 'Sierra starts at 11.49 lakh and Aeris at 15 lakh.';
+        $this->fakeAi();
+        $r = $this->chat($token, 'I need to compare Tata Sierra and Tata Iris')->assertOk();        // "Iris" sounds like Aeris
+        $this->assertEqualsCanonicalizing(['Tata Sierra', 'Tata Aeris'], collect($r->json('links'))->pluck('title')->all());
+        $this->assertStringEndsWith('/compare/sierra-vs-aeris', collect($r->json('actions'))->firstWhere('type', 'link')['url']);
+
+        $u = $this->chat($token, 'Tata Zorbax ki price batao')->assertOk();                          // not in our data at all
+        $this->assertStringContainsString('NOT a model in our catalog', $this->aiPayload());
+        $this->assertStringContainsString('do NOT describe it', $this->aiPayload());
+    }
+
+    public function test_compare_with_a_brand_asks_which_model_then_compares_with_the_car_in_focus(): void
+    {
+        $this->tataCatalog();
+        $mahindra = \App\Models\VehicleBrand::create(['name' => 'Mahindra', 'is_active' => true]);
+        foreach ([['Thar', 'thar', 1100000], ['XUV700', 'xuv700', 1400000]] as [$n, $slug, $price]) {
+            \App\Models\VehicleModel::create(['brand_id' => $mahindra->id, 'name' => $n, 'slug' => $slug, 'status' => 'launched', 'price_min' => $price, 'is_published' => true, 'vehicle_type' => 'car', 'overview' => "Mahindra $n SUV."]);
+        }
+        \App\Services\CarMasters::flush(); Cache::flush();
+        $token = $this->verified();
+        $this->aiText = 'Tata Sierra starts at 11.49 lakh and the Thar at 11 lakh.';
+        $this->fakeAi();
+        $this->chat($token, 'Tata Sierra ke bare mein batao')->assertOk();
+        $calls = count(Http::recorded());
+
+        $q = $this->chat($token, 'compare with Mahindra')->assertOk();
+        $this->assertStringContainsString('Which Mahindra model', $q->json('answer'));                  // asks which one, with real models
+        $this->assertStringContainsString('Thar', $q->json('answer'));
+        $this->assertEqualsCanonicalizing(['Mahindra Thar', 'Mahindra XUV700'], collect($q->json('links'))->pluck('title')->all());
+        $this->assertSame($calls, count(Http::recorded()));                                             // no AI, no random list
+
+        $c = $this->chat($token, 'Thar')->assertOk();
+        $this->assertEqualsCanonicalizing(['Tata Sierra', 'Mahindra Thar'], collect($c->json('links'))->pluck('title')->all());
+        $this->assertStringEndsWith('/compare/sierra-vs-thar', collect($c->json('actions'))->firstWhere('type', 'link')['url']);
+    }
+
+    public function test_replies_do_not_start_with_arre_or_the_name_and_never_ask_two_turns_in_a_row(): void
+    {
+        $token = $this->verified();
+        $this->aiText = 'Arre Rahul bhai, the Sierra starts at 11 lakh. Would you like to see more?';
+        $this->fakeAi();
+        $a = $this->chat($token, 'what is the price of the sierra?')->assertOk()->json('answer');
+        $this->assertStringNotContainsString('Arre', $a);
+        $this->assertStringNotContainsString('bhai', $a);
+        $this->assertStringStartsWith('The Sierra', $a);
+        $this->assertStringEndsWith('?', $a);                                                           // first time a question is fine
+
+        $b = $this->postJson('/assistant/chat', ['message' => 'and the nexon price?', 'history' => [['role' => 'user', 'content' => 'x'], ['role' => 'assistant', 'content' => $a]]], ['X-Assistant-Token' => $token])->assertOk()->json('answer');
+        $this->assertStringNotContainsString('?', $b);                                                  // the previous reply ended with a question, so this one does not
+        $this->assertStringContainsString('starts at 11 lakh', $b);
+    }
+
     public function test_dynamic_page_content_answers_questions_even_without_site_words(): void
     {
         \App\Models\Page::create(['title' => 'Exchange bonus scheme', 'slug' => 'exchange-bonus', 'status' => 'published', 'body' => '<p>Bring your old vehicle and receive an additional bonus voucher worth 25000 rupees at purchase.</p>']);

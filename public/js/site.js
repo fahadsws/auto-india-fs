@@ -24,14 +24,14 @@
   const views = { load: $('#vLoad'), lead: $('#vLead'), otp: $('#vOtp'), chat: $('#vChat'), fb: $('#vFb') };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false;
-  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'en', cid = '';
+  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'en', cid = '', flushVoice = null;
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }, del: k => { try { localStorage.removeItem(k) } catch (e) {} } };
   token = store.get('aw_token') || '';
   const savedSpeak = store.get('ag_speak'); speakOn = savedSpeak === null ? ag.dataset.voice === '1' : savedSpeak === '1';
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
   // Widget text is English; the assistant itself mirrors the visitor's language (English / Hindi / Hinglish).
-  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
+  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: "Listening… take your time, I'll send when you pause (or tap the mic)", nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
   const tr = k => T.en[k];
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -309,27 +309,45 @@
 
   /* ---------- voice in: browser speech recognition (free), Hindi by default ---------- */
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  function stopAll() { voiceMode = false; stopAudio(); try { rec && rec.abort(); } catch (e) {} rec = null; el.mic.classList.remove('live'); status(''); }
+  function stopAll() { voiceMode = false; flushVoice = null; stopAudio(); try { rec && rec.abort(); } catch (e) {} rec = null; el.mic.classList.remove('live'); status(''); }
+  /* The visitor is NOT cut off mid-sentence: recognition keeps running, the words appear in the box as they speak, and the message is
+     only sent after a real pause (SILENCE_MS with no new words), or when they tap the mic again to send right away. */
+  const SILENCE_MS = 2200;
   function listen() {
     if (!SR || !voiceMode) return;
     try { rec && rec.abort(); } catch (e) {}
-    const r = rec = new SR(); r.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; r.interimResults = true; r.maxAlternatives = 1;
-    let finalText = '';
+    const r = rec = new SR(); r.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    let text = '', timer = null, done = false;
+    const finish = () => {                                       // the visitor paused long enough (or tapped): send what they said
+      clearTimeout(timer); if (done) return;
+      const v = text.trim(); if (!v) return;
+      done = true; rec = null; flushVoice = null; try { r.abort(); } catch (e) {}
+      el.mic.classList.remove('live'); el.text.value = ''; status('');
+      if (voiceMode) send(v, true);
+    };
+    flushVoice = finish;
     r.onstart = () => { el.mic.classList.add('live'); status(tr('listening')); };
-    r.onresult = e => { let s = ''; for (const x of e.results) s += x[0].transcript; finalText = s; el.text.value = s; };
+    r.onresult = e => {
+      let s = ''; for (const x of e.results) s += x[0].transcript + ' ';
+      text = s; el.text.value = s.trim();
+      clearTimeout(timer); timer = setTimeout(finish, SILENCE_MS);      // every new word restarts the pause timer
+    };
     r.onerror = e => { if (e.error === 'not-allowed') { alert(tr('mic')); stopAll(); } };
     r.onend = () => {
-      if (rec !== r) return;                                     // an older recogniser that was replaced or stopped
-      el.mic.classList.remove('live');
-      const v = finalText.trim(); el.text.value = '';
-      if (v && voiceMode) send(v, true);
-      else if (voiceMode) { status(tr('nocatch')); setTimeout(() => { if (voiceMode && !busy) listen(); }, 400); }
+      if (rec !== r || done) return;                             // an older recogniser that was replaced or already sent
+      clearTimeout(timer);
+      if (text.trim()) finish();                                 // the browser ended the session: send what we have
+      else { el.mic.classList.remove('live'); if (voiceMode) { status(tr('nocatch')); setTimeout(() => { if (voiceMode && !busy && rec === r) listen(); }, 400); } }
     };
     try { r.start(); } catch (e) {}
   }
   el.mic.addEventListener('click', () => {
     if (!SR) { alert(tr('nosr')); return; }
-    if (voiceMode) { stopAll(); return; }
+    if (voiceMode) {
+      if (flushVoice && el.text.value.trim()) { flushVoice(); return; }          // tap while talking = "send now"
+      if (audio || (window.speechSynthesis && speechSynthesis.speaking)) { stopAudio(); return; }   // tap while the assistant speaks = interrupt it
+      stopAll(); return;
+    }
     el.mic.classList.remove('resume'); voiceMode = true; stopAudio(); listen();
   });
 

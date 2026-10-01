@@ -169,3 +169,13 @@ Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan o
 - **"इसकी डिटेल पेज ओपन करना" / "iska page kholo"** opens the selected (or named) car's page. Other pages ("contact page kholo") are not hijacked.
 - The AI is told it cannot open pages or look anything up, so it no longer says "main abhi check karke batata hoon".
 - If the assistant sounds too chatty or uses a pet phrase ("Arre Rahul bhai"), check **Settings -> Assistant -> Extra personality / business rules**; that text is added to every prompt.
+
+## Behaving like a person: voice, news, unknown models, compare
+- **Voice no longer cuts you off.** Recognition keeps running while you speak; your words appear in the box, and the message is sent only after a real pause (2.2 s with no new words). Tap the mic while talking to send at once; tap it while the assistant is speaking to interrupt it. (Tested in a real browser with a scripted recogniser: a mid-sentence pause sends nothing, the full sentence goes out as one message.)
+- **General news works.** "Latest news for the car industry", "badi khabar batao" show the newest real articles; only a named topic with no article gets "we have no news on that".
+- **Never describes a car from memory.** If a word after a brand is not one of its models ("Tata Zorbax"), the AI is told it is not in our data and must say so instead of inventing history. Sound-alikes are corrected ("Tata Iris" -> Aeris). The rule in the prompt: for any specific car, price, spec, launch, news or offer use only our data.
+- **"compare with Mahindra"** asks which Mahindra model (listing real ones, with cards), then compares it with the car being discussed and links the real compare page.
+- **Sounds human.** No "Arre Rahul bhai" openers (stripped even if the Settings text asks for them), the visitor's name is not used to start replies, and the assistant never asks a question two turns in a row.
+
+### How the knowledge works (no retraining needed)
+The assistant is not a trained model. Every message is answered by looking things up live and handing the AI only those facts: used stock, new models, news, videos, your dynamic pages and business facts, all read from your own database (the knowledge index is updated whenever you save a record). The AI only turns those facts into a friendly sentence. To teach it something new: add or edit it in Admin (a car, an article, a page, **Business facts** in Settings), then it knows it immediately. Wrong answers are fixed in the code that picks the facts or in the rules above, never by retraining.
