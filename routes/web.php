@@ -80,6 +80,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('articles/import-url', [Admin\ArticleController::class, 'importUrl'])->middleware('permission:articles.create')->name('articles.import-url');
         Route::post('articles/ai-draft', [Admin\ArticleController::class, 'aiDraft'])->middleware('permission:articles.create')->name('articles.ai');
 
+        Route::middleware('permission:pages.manage')->group(function () {
+            Route::get('pages/data', [Admin\PageController::class, 'data'])->name('pages.data');
+            Route::post('pages/bulk', [Admin\PageController::class, 'bulk'])->name('pages.bulk');
+            Route::get('pages/{page}/preview', [Admin\PageController::class, 'preview'])->name('pages.preview');
+            Route::resource('pages', Admin\PageController::class)->except(['show']);
+        });
+
         Route::middleware('permission:categories.manage')->group(function () {
             Route::get('categories/data', [Admin\CategoryController::class, 'data'])->name('categories.data');
             Route::post('categories/bulk', [Admin\CategoryController::class, 'bulk'])->name('categories.bulk');
@@ -171,3 +178,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
     });
 });
+
+/* Custom pages created in the admin: keep this LAST so it only matches when no other route does. */
+Route::get('/{slug}', [Site\CustomPageController::class, 'show'])->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('page.show');

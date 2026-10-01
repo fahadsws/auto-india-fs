@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
     public const PERMISSIONS = [
         'Dashboard' => ['admin.access'],
         'Articles' => ['articles.view', 'articles.create', 'articles.edit_own', 'articles.edit_all', 'articles.publish', 'articles.delete'],
-        'Content' => ['categories.manage', 'sources.manage', 'videos.manage', 'cars.manage'],
+        'Content' => ['categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'pages.manage'],
         'Cars & Leads' => ['listings.manage', 'leads.view', 'leads.manage'],
         'System' => ['users.manage', 'roles.manage', 'settings.manage', 'automation.manage'],
     ];
@@ -40,7 +40,7 @@ class DatabaseSeeder extends Seeder
         Role::findOrCreate('Admin', 'web')->syncPermissions(array_diff($all, ['roles.manage']));
         Role::findOrCreate('Editor', 'web')->syncPermissions([
             'admin.access', 'articles.view', 'articles.create', 'articles.edit_own', 'articles.edit_all', 'articles.publish', 'articles.delete',
-            'categories.manage', 'videos.manage', 'sources.manage', 'cars.manage',
+            'categories.manage', 'videos.manage', 'sources.manage', 'cars.manage', 'pages.manage',
         ]);
         Role::findOrCreate('Author', 'web')->syncPermissions(['admin.access', 'articles.view', 'articles.create', 'articles.edit_own']);
         Role::findOrCreate('Sales', 'web')->syncPermissions(['admin.access', 'listings.manage', 'leads.view', 'leads.manage']);

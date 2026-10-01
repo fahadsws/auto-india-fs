@@ -14,12 +14,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ $pageTitle }}</title>
   <meta name="description" content="{{ \Illuminate\Support\Str::limit($pageDesc, 160, '') }}">
-  <link rel="canonical" href="{{ url()->current() }}">
+  <link rel="canonical" href="{{ trim($__env->yieldContent('canonical')) ?: url()->current() }}">
+  @hasSection('robots')<meta name="robots" content="@yield('robots')">@endif
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="theme-color" content="#e11d2e">
   <meta property="og:site_name" content="{{ $siteName }}">
-  <meta property="og:title" content="{{ $pageTitle }}">
-  <meta property="og:description" content="{{ \Illuminate\Support\Str::limit($pageDesc, 200, '') }}">
+  <meta property="og:title" content="{{ trim($__env->yieldContent('og_title')) ?: $pageTitle }}">
+  <meta property="og:description" content="{{ \Illuminate\Support\Str::limit(trim($__env->yieldContent('og_description')) ?: $pageDesc, 200, '') }}">
   <meta property="og:image" content="{{ $pageImage }}">
   <meta property="og:type" content="@yield('og_type', 'website')">
   <meta property="og:url" content="{{ url()->current() }}">

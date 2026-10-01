@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class HomeSetting extends Model
 {
     /** Pages a vertical ad can be placed on: key => label. Horizontal ads always sit under the home hero. */
-    public const AD_PAGES = ['new' => 'New cars / bikes / trucks', 'used' => 'Used cars', 'news' => 'News', 'videos' => 'Videos', 'emi' => 'Car EMI calculator'];
+    public const AD_PAGES = ['new' => 'New cars / bikes / trucks', 'used' => 'Used cars', 'news' => 'News', 'videos' => 'Videos', 'emi' => 'Car EMI calculator', 'page' => 'Custom pages'];
 
     protected $guarded = [];
     protected $casts = ['hero_banners' => 'array', 'trending_ids' => 'array', 'collections' => 'array', 'ads' => 'array'];

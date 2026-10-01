@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Category;
 use App\Models\Setting;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
@@ -20,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrapFive();
+
+        // Laravel 12.x ships a built-in @context directive that would swallow the "@context" key of our JSON-LD
+        // schema blocks. Override it so it prints as plain text.
+        Blade::directive('context', fn ($expression) => '@context'.($expression ? "($expression)" : ''));
 
         // Super Admin bypasses every permission check.
         Gate::before(fn ($user) => $user->hasRole('Super Admin') ? true : null);
