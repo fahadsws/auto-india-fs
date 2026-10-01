@@ -19,7 +19,10 @@ use Illuminate\Support\Str;
 class Assistant
 {
     /** Words that mean "show me something from the website". */
-    private const SITE_WORDS = '/\b(price|prices|pricing|cost|on[- ]?road|ex[- ]?showroom|emi|variants?|used cars?|second[- ]?hand|listings?|for sale|in stock|stock|news|articles?|videos?|reviews?|launch(es|ed)?|upcoming|compare|comparison|brochure|test ?drive|book(ing)?|dealers?|showrooms?|contact|address|phone number|about (you|us)|your (site|website|cars?|stock|team)|(on|from) (your|this) (site|website)|show me|list of)\b/i';
+    private const SITE_WORDS = '/\b(price|prices|pricing|cost|on[- ]?road|ex[- ]?showroom|emi|variants?|used cars?|second[- ]?hand|listings?|for sale|in stock|stock|news|articles?|videos?|reviews?|launch(es|ed)?|upcoming|compare|comparison|brochure|test ?drive|book(ing)?|dealers?|showrooms?|contact|address|phone|email|timings?|hours|opening|working hours|where are you|location|services?|offers?|warranty|finance|loan|exchange|insurance|about (you|us)|your (site|website|cars?|stock|team)|(on|from) (your|this) (site|website)|show me|list of)\b/i';
+
+    /** Questions about the business itself (contact, hours, services...). */
+    private const ABOUT_WORDS = '/\b(contact|address|phone|email|timings?|hours|opening|working hours|where are you|location|services?|offers?|warranty|finance|loan|exchange|insurance|about (you|us)|who are you|your (team|company|business))\b/i';
 
     /** @return array{answer:string, source:string, links:array, cached?:bool} */
     public function reply(string $message, array $history, AssistantSession $session, string $ip, bool $voice = false, bool $degraded = false): array
@@ -28,30 +31,40 @@ class Assistant
 
         // 1) Zero-cost local answers.
         if ($local = $this->local($message, $session)) {
-            return $this->finish($session, $ip, $message, $local, 'none', [], $voice, 0, 0, true);
+            return $this->finish($session, $ip, $message, $local, 'none', [], $voice, 0, 0, true, ['mode' => 'ai', 'items' => []]);
         }
 
-        // 2) Does the visitor want OUR data? Search is a cheap DB query; only used if it is relevant.
+        // 2) Does the visitor want OUR data? First try a direct database lookup (stock, prices, counts), then text search.
+        $siteWords = (bool) preg_match(self::SITE_WORDS, $message);
+        $filters = SiteData::parse($message);
+        $db = SiteData::wanted($filters, $siteWords) ? SiteData::lookup($filters) : null;
+
         $hits = KnowledgeBase::search($message, 3);
-        if ($hits->isEmpty() && $history && preg_match(self::SITE_WORDS, $message)) { // short follow-up ("what about diesel?")
+        if ($hits->isEmpty() && $history && $siteWords) { // short follow-up ("what about diesel?")
             $lastUser = collect($history)->where('role', 'user')->last()['content'] ?? '';
             if ($lastUser) $hits = KnowledgeBase::search(Str::limit($lastUser, 120, '').' '.$message, 3);
         }
-        $site = $hits->isNotEmpty() && (preg_match(self::SITE_WORDS, $message) || $this->titleMatches($hits, $message));
-        if (! $site) $hits = collect();
+        $about = preg_match(self::ABOUT_WORDS, $message) ? KnowledgeBase::siteInfo() : null;   // business details: contact, hours, services...
+        $useHits = $hits->isNotEmpty() && ($siteWords || $this->titleMatches($hits, $message));
+        $hits = $useHits ? $hits : collect();
+        if ($db && ! $this->titleMatches($hits, $message)) $hits = collect();   // the database answer is the main source
+        if ($about) $hits = $hits->reject(fn ($h) => $h->id === $about->id)->prepend($about)->take(3)->values();
 
-        $links = $hits->take(3)->map(fn ($h) => ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type])->values()->all();
+        $site = $db !== null || $hits->isNotEmpty();
+        $ctx = trim(($db['context'] ?? '').($hits->isNotEmpty() ? ($db ? "\n\n" : '').$hits->map(fn ($h, $i) => '['.($i + 1)."] ({$h->type}) {$h->title}\n".Str::limit($h->content, in_array($h->type, ['car', 'listing'], true) ? 800 : 500, '…'))->implode("\n\n") : ''));
+        $links = $db['links'] ?? $hits->take(3)->map(fn ($h) => ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type])->values()->all();
+        $sources = $site ? ['mode' => $db ? 'database' : 'search', 'items' => array_merge($db['sources'] ?? [], $hits->map(fn ($h) => ['type' => $h->type, 'title' => $h->title, 'url' => KnowledgeBase::absolute($h->url)])->all())] : ['mode' => 'ai', 'items' => []];
         $source = $site ? 'kb' : 'web';
 
         // 3) Response cache (only for stand-alone questions, so context never leaks between conversations).
-        $ckey = 'asst:resp:'.md5(Str::lower($message).'|'.($site ? $hits->pluck('id')->implode(',') : 'g').'|'.(int) $voice);
+        $ckey = 'asst:resp:'.md5(Str::lower($message).'|'.($site ? md5($ctx) : 'g').'|'.(int) $voice);
         if (! $history && ($c = Cache::get($ckey))) {
-            return $this->finish($session, $ip, $message, $c['answer'], $c['source'], $c['links'], $voice, 0, 0, true);
+            return $this->finish($session, $ip, $message, $c['answer'], $c['source'], $c['links'], $voice, 0, 0, true, $c['sources'] ?? $sources);
         }
 
         $answer = null; $in = 0; $out = 0;
         if (! $degraded && AiClient::configured()) {
-            $msgs = $this->messages($message, $history, $hits, $voice, $session);
+            $msgs = $this->messages($message, $history, $ctx, $voice, $session);
             $answer = AiClient::chat($msgs, [
                 'temperature' => 0.8, 'timeout' => 40,
                 'max_tokens' => $voice ? AssistantGuard::limit('max_output_voice') : AssistantGuard::limit('max_output'),
@@ -64,26 +77,32 @@ class Assistant
             }
             if ($answer && str_contains($answer, '[[WEB]]')) {
                 $answer = trim(str_replace('[[WEB]]', '', $answer));
-                $source = 'web'; $links = [];
+                $source = 'web'; $links = []; $sources = ['mode' => 'ai', 'items' => []];
             }
         }
 
         $fromAi = (bool) $answer;
         if (! $answer) { // AI off, failed, or site-wide budget reached: answer straight from our own data
-            $hits = $hits->isNotEmpty() ? $hits : KnowledgeBase::search($message, 3);
-            if ($hits->isNotEmpty()) {
+            if ($ctx !== '' ) {
                 $source = 'kb';
-                $links = $hits->take(3)->map(fn ($h) => ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type])->values()->all();
-                $answer = "Here's what I found on our site: ".$hits->take(3)->pluck('title')->implode('; ').'. Tap a link below to read more.';
+                $answer = "Here's what I found on our site:\n".($db ? $db['context'] : $hits->take(3)->pluck('title')->implode('; ').'. Tap a link below to read more.');
             } else {
-                $source = 'none'; $links = [];
-                $answer = "I couldn't find that on our site yet. Try browsing our news or used cars, or tell me a bit more about what you're looking for.";
+                $fallback = KnowledgeBase::search($message, 3);
+                if ($fallback->isNotEmpty()) {
+                    $source = 'kb';
+                    $links = $fallback->map(fn ($h) => ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type])->values()->all();
+                    $sources = ['mode' => 'search', 'items' => $fallback->map(fn ($h) => ['type' => $h->type, 'title' => $h->title, 'url' => KnowledgeBase::absolute($h->url)])->all()];
+                    $answer = "Here's what I found on our site: ".$fallback->pluck('title')->implode('; ').'. Tap a link below to read more.';
+                } else {
+                    $source = 'none'; $links = []; $sources = ['mode' => 'ai', 'items' => []];
+                    $answer = "I couldn't find that on our site yet. Try browsing our news or used cars, or tell me a bit more about what you're looking for.";
+                }
             }
         }
 
-        if ($fromAi && ! $history) Cache::put($ckey, ['answer' => $answer, 'source' => $source, 'links' => $links], now()->addDay());
+        if ($fromAi && ! $history) Cache::put($ckey, ['answer' => $answer, 'source' => $source, 'links' => $links, 'sources' => $sources], now()->addDay());
 
-        return $this->finish($session, $ip, $message, $answer, $source, $links, $voice, $in, $out, false);
+        return $this->finish($session, $ip, $message, $answer, $source, $links, $voice, $in, $out, false, $sources);
     }
 
     /** True when a hit's title shares a brand/model word with the question ("creta", "brezza", "nexon"). */
@@ -98,10 +117,10 @@ class Assistant
         return false;
     }
 
-    private function finish(AssistantSession $s, string $ip, string $q, string $answer, string $source, array $links, bool $voice, int $in, int $out, bool $cached): array
+    private function finish(AssistantSession $s, string $ip, string $q, string $answer, string $source, array $links, bool $voice, int $in, int $out, bool $cached, array $sources = []): array
     {
         AssistantGuard::record($s, $in, $out, $ip);
-        ChatLog::create(['session_id' => Str::limit((string) $s->token, 60, ''), 'assistant_session_id' => $s->id, 'question' => $q, 'answer' => $answer, 'source' => $source, 'voice' => $voice, 'tokens_in' => $in, 'tokens_out' => $out, 'cached' => $cached]);
+        ChatLog::create(['session_id' => Str::limit((string) $s->token, 60, ''), 'assistant_session_id' => $s->id, 'question' => $q, 'answer' => $answer, 'source' => $source, 'voice' => $voice, 'tokens_in' => $in, 'tokens_out' => $out, 'cached' => $cached, 'sources' => $sources ?: null]);
 
         $limit = AssistantGuard::limit('msgs_day');
         return ['answer' => $answer, 'source' => $source, 'links' => $links, 'left' => max(0, $limit - $s->messages_today), 'cached' => $cached];
@@ -124,7 +143,7 @@ class Assistant
         return null;
     }
 
-    private function messages(string $message, array $history, $hits, bool $voice, AssistantSession $s): array
+    private function messages(string $message, array $history, string $ctx, bool $voice, AssistantSession $s): array
     {
         $name = Setting::get('assistant.name', 'Auto Guide');
         $site = Setting::get('site.name', config('app.name'));
@@ -141,10 +160,9 @@ class Assistant
             .($voice ? 'Your reply will be SPOKEN aloud: plain spoken sentences only - no markdown, lists, URLs or emojis. ' : 'Light **bold** is fine; no long lists. ')
             .Setting::get('assistant.extra_instructions', '');
 
-        if ($hits->isNotEmpty()) {
-            $ctx = $hits->map(fn ($h, $i) => '['.($i + 1)."] ({$h->type}) {$h->title}\n".Str::limit($h->content, 500, '…'))->implode("\n\n");
-            $persona .= "\n\nFROM OUR WEBSITE (real cars, listings, news - use these facts and mention items by name; add your own knowledge naturally where it helps):\n$ctx\n\n"
-                .'If this does not actually match the question, start your reply with [[WEB]] and answer from your own knowledge instead.';
+        if ($ctx !== '') {
+            $persona .= "\n\nFROM OUR WEBSITE (live data from our own database - cars in stock, prices, listings, news, business details). Use these facts, quote prices exactly, mention items by name and never invent other stock, prices or details. If nothing matches what they asked, say so honestly and suggest widening the search or talking to our team. Add your own knowledge naturally where it helps:\n$ctx\n\n"
+                .'If this does not actually relate to the question, start your reply with [[WEB]] and answer from your own knowledge instead.';
         } else {
             $persona .= "\n\nAnswer fully from your own knowledge. If they ask about our own listings, prices or stock and you don't have it, say you'll point them to the right page rather than guessing.";
         }

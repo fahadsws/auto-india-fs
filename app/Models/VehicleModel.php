@@ -70,9 +70,17 @@ class VehicleModel extends Model
             'title' => $this->full_name.' ('.$this->status_label.')',
             'content' => trim('New '.strtolower(config("vehicles.{$this->vehicle_type}.label") ?? 'car')." model.{$this->full_name}. Status: {$this->status}. Price: {$this->price_label}. "
                 .($this->body_type ? "Body type {$this->body_type}. " : '').($this->fuel_types ? 'Fuel: '.implode(', ', $this->fuel_types).'. ' : '')
-                .$specs.'. '.Str::limit(strip_tags((string) $this->overview), 2200, '')),
+                .$specs.'. '.$this->extraKnowledge().Str::limit(strip_tags((string) $this->overview), 2200, '')),
             'url' => $this->url,
             'image' => $this->hero_url,
         ];
+    }
+
+    /** Highlights and FAQ answers, so the assistant can answer from them too. */
+    private function extraKnowledge(): string
+    {
+        $hl = collect($this->highlights ?? [])->map(fn ($h) => is_array($h) ? ($h['text'] ?? $h['title'] ?? implode(' ', $h)) : $h)->filter()->implode('; ');
+        $faq = collect($this->faq ?? [])->filter(fn ($f) => filled($f['q'] ?? null) && filled($f['a'] ?? null))->map(fn ($f) => 'Q: '.$f['q'].' A: '.strip_tags($f['a']))->implode(' ');
+        return trim(($hl ? 'Highlights: '.$hl.'. ' : '').($faq ? 'FAQ: '.Str::limit($faq, 1500, '').' ' : ''));
     }
 }

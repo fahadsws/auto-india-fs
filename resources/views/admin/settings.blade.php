@@ -39,6 +39,7 @@
       <div class="mt-4 d-flex flex-wrap gap-2">
         <button class="btn btn-primary"><i class="ti ti-device-floppy me-1"></i>Save settings</button>
         <button type="button" class="btn btn-label-primary" id="runCheck"><i class="ti ti-stethoscope me-1"></i>Run setup check</button>
+        <button type="button" class="btn btn-label-secondary" id="runReindex"><i class="ti ti-database-import me-1"></i>Rebuild knowledge base now</button>
       </div>
       <div class="card mt-3 d-none" id="checkCard"><div class="card-header"><h5 class="card-title mb-0">Setup check</h5><small class="text-muted">Save your settings first, then run the check. It tests the AI provider and plays a sample in your saved ElevenLabs voice.</small></div>
         <div class="card-body" id="checkBody"></div></div>
@@ -49,6 +50,14 @@
 
 @push('scripts')
 <script>
+document.getElementById('runReindex').addEventListener('click', async function () {
+  const btn = this, old = btn.innerHTML; btn.disabled = true; btn.textContent = 'Rebuilding…';
+  try {
+    const r = await fetch(@json(route('admin.settings.reindex')), { method: 'POST', headers: { 'X-CSRF-TOKEN': @json(csrf_token()), 'Accept': 'application/json' } });
+    const d = await r.json(); btn.textContent = d.ok ? 'Done - ' + d.items + ' items indexed' : 'Failed';
+  } catch (e) { btn.textContent = 'Failed: ' + e.message; }
+  setTimeout(() => { btn.innerHTML = old; btn.disabled = false; }, 3500);
+});
 document.getElementById('runCheck').addEventListener('click', async function () {
   const btn = this, card = document.getElementById('checkCard'), body = document.getElementById('checkBody');
   btn.disabled = true; card.classList.remove('d-none'); body.innerHTML = '<div class="text-muted">Checking… (this calls your AI and voice providers once)</div>';

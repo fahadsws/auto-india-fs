@@ -22,6 +22,7 @@ class AssistantTest extends TestCase
     {
         parent::setUp();
         Cache::flush();
+        \App\Services\CarMasters::flush();   // static brand/fuel id cache must not outlive a rolled-back test
         config(['services.elevenlabs.base' => 'https://api.elevenlabs.io']);
         RateLimiter::clear('x');
         Setting::put('ai.api_key', 'test-key');
@@ -288,5 +289,113 @@ class AssistantTest extends TestCase
         \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->update(['value' => 'garbage-not-encrypted', 'is_secret' => 1]);
         $migration->up();   // must not throw
         $this->assertSame('garbage-not-encrypted', \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->value('value'));
+    }
+
+    private function listing(array $o = []): \App\Models\Listing
+    {
+        static $n = 0; $n++;
+        return \App\Models\Listing::create($o + ['title' => "Test Car $n", 'slug' => "test-car-$n", 'brand' => 'Hyundai', 'model' => 'Creta', 'year' => 2019, 'price' => 790000,
+            'km_driven' => 45000, 'fuel' => 'Diesel', 'transmission' => 'Manual', 'owner' => '1st', 'city' => 'Pune', 'status' => 'active']);
+    }
+
+    private function seedStock(): void
+    {
+        $this->listing(['title' => 'Hyundai Creta SX Diesel', 'slug' => 'creta-sx', 'price' => 790000]);
+        $this->listing(['title' => 'Maruti Baleno Petrol', 'slug' => 'baleno', 'brand' => 'Maruti Suzuki', 'model' => 'Baleno', 'fuel' => 'Petrol', 'price' => 1200000]);
+        $this->listing(['title' => 'Tata Nexon Mumbai Diesel', 'slug' => 'nexon', 'brand' => 'Tata', 'model' => 'Nexon', 'city' => 'Mumbai', 'price' => 600000]);
+    }
+
+    public function test_filter_question_is_answered_from_the_database_with_real_values(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->postJson('/assistant/chat', ['message' => 'Show me diesel used cars in Pune under 8 lakh'], ['X-Assistant-Token' => $token])->assertOk()->assertJsonPath('source', 'kb');
+
+        $payload = $this->aiPayload();
+        $this->assertStringContainsString('Hyundai Creta SX Diesel', $payload);
+        $this->assertStringContainsString('7.9 Lakh', $payload);
+        $this->assertStringNotContainsString('Baleno', $payload);          // petrol, over budget
+        $this->assertStringNotContainsString('Nexon', $payload);           // other city
+        $this->assertSame('Hyundai Creta SX Diesel', $res->json('links.0.title'));
+        $this->assertStringContainsString('7.9 Lakh', $res->json('links.0.price'));
+        $this->assertSame('database', \App\Models\ChatLog::latest('id')->first()->sources['mode']);
+    }
+
+    public function test_count_question_uses_real_stock_count(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $this->postJson('/assistant/chat', ['message' => 'How many used cars do you have?'], ['X-Assistant-Token' => $token])->assertOk();
+        $this->assertStringContainsString('matching (no filters): 3', $this->aiPayload());
+    }
+
+    public function test_no_matching_stock_is_stated_honestly(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->postJson('/assistant/chat', ['message' => 'used cars under 2 lakh in Pune'], ['X-Assistant-Token' => $token])->assertOk();
+        $this->assertStringContainsString('none in our stock match', $this->aiPayload());
+        $this->assertSame([], $res->json('links'));
+    }
+
+    public function test_filter_parsing(): void
+    {
+        $f = \App\Services\SiteData::parse('diesel SUV between 5 and 8 lakh in Pune after 2018, first owner, automatic');
+        $this->assertSame(500000, $f['price_min']);
+        $this->assertSame(800000, $f['price_max']);
+        $this->assertSame(['diesel'], $f['fuel']);
+        $this->assertSame('Pune', $f['city']);
+        $this->assertSame(2018, $f['year_min']);
+        $this->assertSame('auto', $f['transmission']);
+        $this->assertSame('1', $f['owner']);
+        $this->assertSame(1500000, \App\Services\SiteData::parse('budget 15 lakh')['price_max']);
+        $this->assertSame(50000, \App\Services\SiteData::parse('used cars below 50000 km')['km_max']);
+        $this->assertFalse(\App\Services\SiteData::wanted(\App\Services\SiteData::parse('Is diesel better than petrol for long drives?'), false));
+    }
+
+    public function test_business_facts_and_pages_are_known_to_the_assistant(): void
+    {
+        Setting::put('site.phone', '+91 99999 11111');
+        Setting::put('assistant.business_facts', 'Showroom open 10am to 8pm, Monday to Saturday. Free test drives.');
+        \App\Services\KnowledgeBase::syncSiteInfo();
+        \App\Models\Page::create(['title' => 'Warranty policy', 'slug' => 'warranty-policy', 'status' => 'published', 'body' => '<p>Every used car carries a 6 month warranty.</p>']);
+        \App\Models\Page::create(['title' => 'Draft page', 'slug' => 'draft-page', 'status' => 'draft', 'body' => '<p>secret</p>']);
+        $this->assertSame(1, \App\Models\KnowledgeChunk::where('type', 'webpage')->count());   // draft is not indexed
+
+        $token = $this->verified();
+        $this->fakeAi();
+        $this->postJson('/assistant/chat', ['message' => 'What are your showroom timings and phone number?'], ['X-Assistant-Token' => $token])->assertOk();
+        $this->assertStringContainsString('Showroom open 10am to 8pm', $this->aiPayload());
+        $this->assertStringContainsString('99999 11111', $this->aiPayload());
+    }
+
+    public function test_visitor_personal_details_never_reach_the_ai_prompt(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $this->postJson('/assistant/chat', ['message' => 'Show me used cars in Pune'], ['X-Assistant-Token' => $token])->assertOk();
+        $payload = $this->aiPayload();
+        $this->assertStringNotContainsString('rahul@example.com', $payload);
+        $this->assertStringNotContainsString('9876543210', $payload);
+        $this->assertStringContainsString('Rahul', $payload);   // first name only
+    }
+
+    public function test_setup_check_reports_data_counts_and_reindex_works(): void
+    {
+        $this->seedStock();
+        \App\Models\KnowledgeChunk::query()->delete();
+        Http::fake(['*' => Http::response([], 500)]);
+        $admin = $this->admin();
+        $rows = collect($this->actingAs($admin)->postJson('/admin/settings/check')->assertOk()->json('rows'))->keyBy('label');
+        $this->assertSame('warn', $rows['Data: Used cars']['status']);          // 3 in DB, 0 indexed
+        $this->assertStringContainsString('3 in your database, 0 ready', $rows['Data: Used cars']['detail']);
+
+        $this->actingAs($admin)->postJson('/admin/settings/reindex')->assertOk()->assertJson(['ok' => true]);
+        $rows = collect($this->actingAs($admin)->postJson('/admin/settings/check')->json('rows'))->keyBy('label');
+        $this->assertSame('ok', $rows['Data: Used cars']['status']);
     }
 }

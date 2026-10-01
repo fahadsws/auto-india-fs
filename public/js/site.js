@@ -146,7 +146,7 @@
     if (!links || !links.length) return;
     const w = document.createElement('div'); w.className = 'aw-links';
     links.forEach(l => { const a = document.createElement('a'); a.className = 'aw-link'; a.href = l.url;
-      a.innerHTML = (l.image ? '<img src="' + esc(l.image) + '" alt="" loading="lazy">' : '') + '<span>' + esc(l.title) + '</span><i class="ti ti-arrow-right"></i>'; w.appendChild(a); });
+      a.innerHTML = (l.image ? '<img src="' + esc(l.image) + '" alt="" loading="lazy">' : '') + '<span>' + esc(l.title) + (l.price ? '<small class="aw-price">' + esc(l.price) + '</small>' : '') + '</span><i class="ti ti-arrow-right"></i>'; w.appendChild(a); });
     el.msgs.appendChild(w); down();
   }
   const typing = () => { const d = document.createElement('div'); d.className = 'aw-msg bot aw-typing'; d.innerHTML = '<i></i><i></i><i></i>'; el.msgs.appendChild(d); down(); return d; };
