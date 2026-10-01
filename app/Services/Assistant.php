@@ -79,6 +79,9 @@ class Assistant
 
         $answered = $this->absorbAnswer($m, $message, $norm, $parsed);
         $ask = $m['ask'] ?? null;
+        if (in_array($ask, ['city', 'budget'], true) && ! $answered && preg_match(AssistantFlow::NO, trim(Str::lower($norm), " .!?,"))) {
+            $m['f'][$ask === 'city' ? 'city_any' : 'budget_any'] = true; $answered = true;      // "no" / "nahi" = no preference
+        }
         $m['ask'] = null;   // a question applies to the very next message only
         $ref = AssistantMemory::resolveReference($norm, $m);
         if ($ref) $m['focus'] = $ref;
@@ -105,6 +108,13 @@ class Assistant
         $run = ($generic || $showAll || $refine || SiteData::wanted($parsed, $siteWords) || ($parsed['_vehicle_word'] && ! empty($filters['type']))) && ! $contentKind;
         $actions = [];
 
+        // 2c) They did not answer the question we asked ("haan", "ok"): say what we need instead of dead-ending.
+        if (in_array($ask, ['city', 'budget', 'type'], true) && ! $answered && ! $reminder && ! $bookKind && ! $enquiry && ! $contentKind && ! $ref && ! $hasFilters && ! $parsed['_vehicle_word'] && ! $siteWords
+            && count(preg_split('/\s+/', $message)) <= 3 && ! str_contains($message, '?')) {
+            $m['ask'] = $ask; $m['turns']++;
+            return $this->done($session, $ip, $message, $this->t('reask_'.$ask, $hi), 'none', [], $voice, $m, $none, []);
+        }
+
         // 3) Test drive / inspection / enquiry: open the booking and ask its first question.
         if ($bookKind || $enquiry) {
             $car = null;
@@ -114,7 +124,7 @@ class Assistant
         }
 
         // 3b) They pointed at one of the shown cars ("pehli wali", "this one"): confirm it and offer the next step.
-        if ($ref && ! $run && ! $siteWords && ! $contentKind) {
+        if ($ref && ! $run && ! $siteWords && ! $contentKind && ! $reminder && $short) {
             $m['stage'] = 'interested'; $m['ask'] = 'offer'; $m['turns']++;
             return $this->done($session, $ip, $message, $this->t('selected', $hi, ['car' => $ref['t'], 'price' => $ref['p'] ?? '']), 'none', [], $voice, $m, $none, []);
         }
@@ -122,6 +132,7 @@ class Assistant
         // 4) Look it up in OUR database: stock/prices/counts, or the latest news / videos.
         $db = $run ? SiteData::lookup($filters) : null;
         if ($db) {
+            $db['what'] = $this->what($filters);
             $m['f'] = $this->clean($filters); $m['shown'] = $db['items']; $m['stage'] = $db['found'] ? 'shortlist' : $m['stage'];
         }
         $content = $contentKind ? SiteData::contentLookup($contentKind, $norm) : null;
@@ -254,9 +265,9 @@ class Assistant
     {
         [$source, $links, $sources, $none] = $state;
         if ($db) {
-            if (! $db['found']) return [$this->t('none_match', $hi, ['desc' => $db['desc']]), 'kb', [], $sources];
+            if (! $db['found']) return [$this->t('none_match', $hi, ['desc' => $db['what'] ?? $db['desc']]), 'kb', [], $sources];
             $list = collect($db['lines'])->map(fn ($l, $i) => ($i + 1).') '.$l)->implode("\n");
-            return [$this->t('found_n', $hi, ['n' => $db['found'], 'desc' => $db['desc']])."\n".$list, 'kb', $links, $sources];
+            return [$this->t('found_n', $hi, ['n' => $db['found'], 'desc' => $db['what'] ?? $db['desc']])."\n".$list, 'kb', $links, $sources];
         }
         if ($content) {
             $list = collect($content['lines'])->map(fn ($l) => '• '.$l)->implode("\n");
@@ -275,6 +286,7 @@ class Assistant
     /** Keep the AI's text clean: no pasted links, and no questions of its own when the app is about to ask one (never several). */
     private function tidy(string $text, bool $appAsks): string
     {
+        $text = preg_replace('~\b(see|check( it)?( out)?|visit|open|click|dekho|dekhiye|dekhein|link|here|at|on)\s*:?\s*https?://\S+~i', '', $text);
         $text = trim(preg_replace('~https?://\S+~', '', $text));
         $parts = preg_split('/(?<=[.!?।])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
         $q = 0;
@@ -313,7 +325,7 @@ class Assistant
         $any = (bool) preg_match('/^(anywhere|any|any city|koi bhi|kahin bhi|kahi bhi|sab|all|no preference|flexible|no limit|no budget|koi limit nahi|koi bhi budget)\b/', $t);
         if ($ask === 'city') {
             if ($any) { $m['f']['city_any'] = true; return true; }
-            if (! isset($parsed['city']) && preg_match('/^[\p{L}\p{M} ]{3,30}$/u', $message) && count(explode(' ', trim($message))) <= 3 && ! preg_match(self::BUY, $norm) && ! preg_match(self::SITE_WORDS, $norm) && ! preg_match(AssistantFlow::NO, $t)) $parsed['city'] = Str::title(trim($message));
+            if (! isset($parsed['city']) && preg_match('/^[\p{L}\p{M} ]{3,30}$/u', $message) && count(explode(' ', trim($message))) <= 3 && ! preg_match(self::BUY, $norm) && ! preg_match(self::SITE_WORDS, $norm) && ! preg_match(AssistantFlow::NO, $t) && ! preg_match(AssistantFlow::YES, $t) && ! preg_match('/^(hmm+|hm+|acha|accha|achha|thik|theek|sahi|ji|fine|cool|great|nice|hello|hi|hey)$/', $t)) $parsed['city'] = Str::title(trim($message));
             return isset($parsed['city']);
         }
         if ($ask === 'budget') {
@@ -333,6 +345,16 @@ class Assistant
     private function clean(array $f): array
     {
         return array_intersect_key($f, array_flip(['type', 'vehicle', 'status', 'price_min', 'price_max', 'fuel', 'transmission', 'city', 'brand', 'brand_id', 'body', 'body_id', 'year', 'year_min', 'year_max', 'km_max', 'owner', 'city_any', 'budget_any']));
+    }
+
+    /** "used cars", "new bikes (under Rs 8 Lakh)", "used cars (diesel, in Pune)" - for sentences, never "no filters". */
+    private function what(array $f): string
+    {
+        $vehicle = $f['vehicle'] ?? 'car';
+        $noun = $vehicle === 'bike' ? 'bikes' : ($vehicle === 'truck' ? 'trucks' : 'cars');
+        $base = ($f['type'] ?? null) === 'used' ? 'used '.$noun : (($f['type'] ?? null) === 'new' ? 'new '.$noun : $noun);
+        $d = SiteData::describe($f);
+        return $d === 'no filters' ? $base : "$base ($d)";
     }
 
     private function label(array $f, string $kind): string
@@ -357,6 +379,9 @@ class Assistant
             'open_label' => [['Open now'], ['Abhi kholo']],
             'view_all' => [['View all {n} cars →'], ['Saari {n} cars dekhein →']],
             'found_n' => [['I found {n} {desc}. Here are the top picks:'], ['Mujhe {n} {desc} mili hain. Top picks yeh hain:']],
+            'reask_city' => [["Just tell me the city - for example Pune or Delhi - or say 'anywhere'."], ["Bas city ka naam bata dijiye - jaise Pune ya Delhi - ya bolein 'kahin bhi'."]],
+            'reask_budget' => [["Just give me a number, like 'under 8 lakh' or 'around 5 lakh' - or say 'no limit'."], ["Bas ek number bata dijiye, jaise '8 lakh ke andar' ya '5 lakh ke aaspas' - ya bolein 'koi limit nahi'."]],
+            'reask_type' => [["Please say 'new' or 'used'."], ["'new' ya 'used' bata dijiye."]],
             'none_match' => [["I couldn't find any cars matching that ({desc}) right now. Try a different budget or city and I'll look again."], ['Abhi is filter ({desc}) mein koi car nahi mili. Budget ya city badal kar dekhte hain?']],
             'latest_news' => [['Here are the latest news stories:'], ['Yeh hain latest news:']],
             'latest_videos' => [['Here are the latest videos:'], ['Yeh hain latest videos:']],

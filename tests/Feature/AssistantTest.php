@@ -177,7 +177,7 @@ class AssistantTest extends TestCase
 
     private function aiPayload(): string
     {
-        $sent = Http::recorded()->filter(fn ($p) => str_contains($p[0]->url(), 'ai.test'))->first();
+        $sent = Http::recorded()->filter(fn ($p) => str_contains($p[0]->url(), 'ai.test'))->last();    // the most recent AI call
         return $sent ? json_encode($sent[0]->data()) : '';
     }
 
