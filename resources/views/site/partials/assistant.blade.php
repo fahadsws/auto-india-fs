@@ -4,6 +4,8 @@
   $siteName = \App\Models\Setting::get('site.name', config('app.name'));
   $greeting = \App\Models\Setting::get('assistant.greeting') ?: "I'm the {$siteName} Smart Assistant! How can I help you today?";
   $mode = $mode ?? 'float';
+  $voiceOn = \App\Services\ElevenLabs::configured();
+  $voiceGreet = str_replace('{name}', $asstName, \App\Models\Setting::get('assistant.voice_greeting') ?: "Hello! I'm {name}, your car assistant. How can I help you today?");
   $chips = [
     ['New launches', 'ti-car', 'ask', 'Show me the latest new car launches in India'],
     ['Locate dealer', 'ti-map-pin', 'ask', 'Help me find a dealer or showroom near me'],
@@ -19,7 +21,7 @@
     ['Certified used cars', 'Find your next car at the best price', route('cars.index'), 'p2'],
   ];
 @endphp
-<div class="aw {{ $mode === 'page' ? 'aw-page' : '' }}" id="ag" data-mode="{{ $mode }}" data-name="{{ $asstName }}"
+<div class="aw {{ $mode === 'page' ? 'aw-page' : '' }}" id="ag" data-mode="{{ $mode }}" data-name="{{ $asstName }}" data-voice="{{ $voiceOn ? 1 : 0 }}" data-fallback="{{ \App\Models\Setting::bool('elevenlabs.browser_fallback', false) ? 1 : 0 }}" data-greet="{{ $voiceGreet }}"
      data-chat="{{ route('assistant.chat') }}" data-tts="{{ route('assistant.tts') }}" data-me="{{ route('assistant.me') }}"
      data-lead="{{ route('assistant.lead') }}" data-verify="{{ route('assistant.verify') }}" data-feedback="{{ route('assistant.feedback') }}">
   @if ($mode === 'float')

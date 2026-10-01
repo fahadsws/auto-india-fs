@@ -75,3 +75,20 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 - The floating button sends out soft, wobbly water ripples, jellies when hovered, and splashes when clicked.
 - While the assistant is thinking, the water stirs faster and rises.
 - Files: new `resources/views/site/partials/bubble.blade.php` (shared by the button, greeting, and form steps), `public/css/assistant.css`, `public/js/site.js` (thinking and splash hooks).
+
+## Voice and conversation update
+**Fixes**
+- `Call to undefined method AiClient::lastUsage()`: this happens when `app/Services/Assistant.php` was uploaded but an old `app/Services/AiClient.php` is still on the server (or OPcache is serving the old class). Chat no longer crashes in that case, and **Settings -> Run setup check** now reports "Code version" so you can see it. Fix: upload every changed file, then run `php artisan optimize:clear` and restart PHP (or reset OPcache).
+- Different voice: the old code quietly switched to the browser's built-in voice whenever ElevenLabs refused a request (wrong plan for that voice, bad key, quota, daily cap). Now the saved voice is always used. If ElevenLabs fails, the assistant says "Voice is unavailable right now" and stays silent instead of sounding like someone else. A browser-voice fallback is available as an optional setting (off by default).
+
+**Real conversation**
+- The assistant now talks like a person: reacts to what the visitor says, short sentences, mirrors English/Hindi/Hinglish, uses the visitor's first name now and then.
+- When the visitor asks for something on the website (prices, cars, listings, news, brochures, test drives, contact...) it answers from the website data and shows link cards. For everything else the AI answers fully on its own with no website data attached (also cheaper in tokens).
+- A spoken greeting plays when the chat opens (same text for everyone, so it is cached and costs almost no ElevenLabs characters). The speaker is on by default once an ElevenLabs key is saved; the visitor can mute it.
+
+**Voice setup guide**
+1. ElevenLabs -> Developers -> API keys -> create a key with **Text to Speech** enabled (add "Voices: read" and "User: read" if you want the checker to show the voice name and plan).
+2. Pick the voice in ElevenLabs -> Voices. On the **free plan**, a voice from the public Voice Library does not work through the API until you click **Add to my voices**. Copy the ID from **My Voices** (or use a premade voice).
+3. Admin -> Settings -> Assistant & voice: paste the key and the voice ID. Model: `eleven_flash_v2_5` (cheap and fast, supports Hindi) or `eleven_multilingual_v2` (richest, best for Hinglish, uses more characters). Tune stability/similarity/speed if you like.
+4. Click **Save settings**, then **Run setup check**. Every row should be green, and you should hear a sample in your voice.
+5. The free plan has about 10,000 characters a month. Replies are limited per visitor per day (Assistant limits) and every repeated sentence is served from cache.

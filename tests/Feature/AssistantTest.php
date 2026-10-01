@@ -22,6 +22,7 @@ class AssistantTest extends TestCase
     {
         parent::setUp();
         Cache::flush();
+        config(['services.elevenlabs.base' => 'https://api.elevenlabs.io']);
         RateLimiter::clear('x');
         Setting::put('ai.api_key', 'test-key');
         Setting::put('ai.base_url', 'https://ai.test/v1');
@@ -167,5 +168,84 @@ class AssistantTest extends TestCase
     {
         $this->get('/assistant')->assertOk()->assertSee('id="ag"', false);
         $this->get('/')->assertOk()->assertSee('js/site.js', false)->assertSee('css/assistant.css', false);
+    }
+
+    private function aiPayload(): string
+    {
+        $sent = Http::recorded()->filter(fn ($p) => str_contains($p[0]->url(), 'ai.test'))->first();
+        return $sent ? json_encode($sent[0]->data()) : '';
+    }
+
+    public function test_general_question_is_answered_by_ai_without_site_data_or_links(): void
+    {
+        \App\Models\KnowledgeChunk::create(['type' => 'car', 'ref_id' => 7, 'title' => 'Hyundai Creta', 'content' => 'Hyundai Creta price from 11 lakh diesel petrol', 'url' => '/new-cars/creta']);
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->postJson('/assistant/chat', ['message' => 'Is diesel better than petrol for long drives?'], ['X-Assistant-Token' => $token])->assertOk();
+        $this->assertSame([], $res->json('links'));
+        $this->assertStringNotContainsString('FROM OUR WEBSITE', $this->aiPayload());
+    }
+
+    public function test_site_question_uses_website_data_and_returns_links(): void
+    {
+        \App\Models\KnowledgeChunk::create(['type' => 'car', 'ref_id' => 7, 'title' => 'Hyundai Creta', 'content' => 'Hyundai Creta price from 11 lakh diesel petrol', 'url' => '/new-cars/creta']);
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->postJson('/assistant/chat', ['message' => 'What is the price of the Creta?'], ['X-Assistant-Token' => $token])->assertOk()->assertJsonPath('source', 'kb');
+        $this->assertSame('Hyundai Creta', $res->json('links.0.title'));
+        $this->assertStringContainsString('FROM OUR WEBSITE', $this->aiPayload());
+    }
+
+    public function test_tts_without_key_returns_204_so_browser_voice_is_used(): void
+    {
+        $token = $this->verified();
+        $this->postJson('/assistant/tts', ['text' => 'Hello there'], ['X-Assistant-Token' => $token])->assertNoContent();
+    }
+
+    public function test_tts_uses_the_saved_voice_id_and_caches_the_clip(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        Setting::put('elevenlabs.api_key', 'el-key');
+        Setting::put('elevenlabs.voice_id', '  MyVoice123  ');
+        $token = $this->verified();
+        Http::fake(['api.elevenlabs.io/*' => Http::response('ID3-fake-mp3', 200, ['Content-Type' => 'audio/mpeg'])]);
+        $h = ['X-Assistant-Token' => $token];
+        $this->postJson('/assistant/tts', ['text' => 'Hello there'], $h)->assertOk()->assertHeader('Content-Type', 'audio/mpeg');
+        $this->postJson('/assistant/tts', ['text' => 'Hello there'], $h)->assertOk();
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/v1/text-to-speech/MyVoice123?') && $r->hasHeader('xi-api-key', 'el-key') && $r['voice_settings']['stability'] === 0.5);
+    }
+
+    public function test_tts_failure_is_reported_never_a_silent_voice_swap(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        Setting::put('elevenlabs.api_key', 'el-key');
+        $token = $this->verified();
+        Http::fake(['api.elevenlabs.io/*' => Http::response(['detail' => ['status' => 'paid_plan_required', 'message' => 'Free users cannot use library voices via the API.']], 402)]);
+        $this->postJson('/assistant/tts', ['text' => 'Hello there'], ['X-Assistant-Token' => $token])
+            ->assertStatus(502)->assertJson(['error' => 'paid_plan_required']);
+    }
+
+    public function test_admin_setup_check_reports_voice_and_ai_status(): void
+    {
+        Setting::put('elevenlabs.api_key', 'el-key');
+        Setting::put('elevenlabs.voice_id', 'abc123');
+        \Illuminate\Support\Facades\Storage::fake('local');
+        Http::fake([
+            'ai.test/*' => Http::response(['choices' => [['message' => ['content' => 'pong']]]]),
+            'api.elevenlabs.io/v1/user/subscription' => Http::response(['tier' => 'free', 'character_count' => 120, 'character_limit' => 10000]),
+            'api.elevenlabs.io/v1/voices/abc123' => Http::response(['name' => 'Aarav', 'category' => 'professional']),
+            'api.elevenlabs.io/v1/text-to-speech/*' => Http::response('ID3-fake', 200),
+        ]);
+        \Spatie\Permission\Models\Role::findOrCreate('Super Admin', 'web');
+        $admin = \App\Models\User::factory()->create();
+        $admin->assignRole('Super Admin');
+
+        $rows = collect($this->actingAs($admin)->postJson('/admin/settings/check')->assertOk()->json('rows'))->keyBy('label');
+        $this->assertSame('ok', $rows['AI provider']['status']);
+        $this->assertStringContainsString('Aarav', $rows['Voice ID']['detail']);
+        $this->assertSame('ok', $rows['Speech test']['status']);
+        $this->assertStringStartsWith('data:audio/mpeg;base64,', $rows['Speech test']['audio']);
+        $this->assertSame('ok', $rows['Code version']['status']);
     }
 }

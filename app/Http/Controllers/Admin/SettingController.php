@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\AiClient;
 use App\Services\Automation;
+use App\Services\ElevenLabs;
 use App\Services\KnowledgeBase;
 use Illuminate\Http\Request;
 
@@ -64,9 +66,14 @@ class SettingController extends Controller
                 ['assistant.require_lead', 'Ask new visitors for their details before chatting', 'bool', 'Saved as a lead in Admin → Leads (type "chatbot").'],
                 ['assistant.otp_required', 'Verify email with a one-time code', 'bool', 'Free: the code is sent with your site mail settings (MAIL_* in .env).'],
                 ['assistant.extra_instructions', 'Extra personality / business rules', 'textarea', 'e.g. "Always suggest booking a test drive. Never discuss competitor dealerships."'],
-                ['elevenlabs.api_key', 'ElevenLabs API key', 'secret', 'Optional. Without it the assistant speaks with the browser\'s free built-in voice.'],
-                ['elevenlabs.voice_id', 'ElevenLabs voice ID', 'text', ''],
-                ['elevenlabs.model', 'ElevenLabs model', 'text', 'eleven_flash_v2_5 is the cheapest and fastest.'],
+                ['assistant.voice_greeting', 'Spoken greeting', 'text', 'Spoken once when the chat opens (if the speaker is on). {name} = assistant name. Same text for everyone, so it is cached and costs almost no ElevenLabs characters. Default: Hello! I\'m {name}, your car assistant. How can I help you today?'],
+                ['elevenlabs.api_key', 'ElevenLabs API key', 'secret', 'Create it in ElevenLabs -> Developers -> API keys with "Text to Speech" enabled. Without a key the assistant uses the browser\'s own voice.'],
+                ['elevenlabs.voice_id', 'ElevenLabs voice ID', 'text', 'Must come from MY VOICES (ElevenLabs -> Voices -> My Voices -> ID). On the free plan a Voice-Library voice only works through the API after you click "Add to my voices". Click "Run setup check" below to hear it.'],
+                ['elevenlabs.model', 'ElevenLabs model', 'text', 'eleven_flash_v2_5 (cheapest, fastest, supports Hindi) or eleven_multilingual_v2 (richest, best for Hinglish, uses more characters).'],
+                ['elevenlabs.stability', 'Voice stability (0-1)', 'number', 'Default 0.5. Lower = more expressive, higher = steadier.'],
+                ['elevenlabs.similarity', 'Voice similarity (0-1)', 'number', 'Default 0.75.'],
+                ['elevenlabs.speed', 'Speaking speed (0.7-1.2)', 'number', 'Default 1.'],
+                ['elevenlabs.browser_fallback', 'If ElevenLabs fails, speak with the browser voice instead', 'bool', 'Off (recommended): the assistant stays silent rather than sounding like a different voice.'],
             ]],
             'Assistant limits' => ['ti-shield-lock', [
                 ['assistant.limit_per_min', 'Messages per minute (per visitor)', 'number', 'Default 6.'],
@@ -76,7 +83,7 @@ class SettingController extends Controller
                 ['assistant.limit_tokens_total', 'AI tokens in total (per visitor, lifetime)', 'number', 'Default 100000.'],
                 ['assistant.limit_ip_tokens_day', 'AI tokens per day (per IP address)', 'number', 'Default 40000. Stops people creating many leads to dodge limits.'],
                 ['assistant.limit_global_tokens_day', 'AI tokens per day (whole site)', 'number', 'Default 500000. When reached, the assistant answers only from your own site data (zero token cost) until midnight.'],
-                ['assistant.limit_tts_chars_day', 'Spoken-reply characters per day (per visitor)', 'number', 'Default 1500. Protects your ElevenLabs quota.'],
+                ['assistant.limit_tts_chars_day', 'Spoken-reply characters per day (per visitor)', 'number', 'Default 3000. Protects your ElevenLabs quota.'],
                 ['assistant.limit_max_input', 'Max characters per question', 'number', 'Default 300.'],
                 ['assistant.limit_max_output', 'Max reply tokens (text)', 'number', 'Default 300.'],
                 ['assistant.limit_max_output_voice', 'Max reply tokens (voice)', 'number', 'Default 180.'],
@@ -110,6 +117,35 @@ class SettingController extends Controller
             }
         }
         return view('admin.settings', ['groups' => self::groups(), 'values' => $values]);
+    }
+
+    /** "Run setup check": verifies DB, code version, AI provider, ElevenLabs voice, mail and knowledge base. */
+    public function check()
+    {
+        $rows = [];
+        $add = function (string $label, string $status, string $detail, ?string $audio = null) use (&$rows) { $rows[] = ['label' => $label, 'status' => $status, 'detail' => $detail, 'audio' => $audio]; };
+
+        $add('Database', \Illuminate\Support\Facades\Schema::hasTable('assistant_sessions') ? 'ok' : 'fail',
+            \Illuminate\Support\Facades\Schema::hasTable('assistant_sessions') ? 'Assistant tables are installed.' : 'Run: php artisan migrate');
+        $add('Code version', method_exists(AiClient::class, 'lastUsage') ? 'ok' : 'fail',
+            method_exists(AiClient::class, 'lastUsage') ? 'All assistant files are up to date.' : 'AiClient.php on this server is old. Upload every changed file, then run php artisan optimize:clear and restart PHP/OPcache.');
+
+        if (AiClient::configured()) {
+            $t = AiClient::test();
+            $add('AI provider', $t['ok'] ? 'ok' : 'fail', $t['ok'] ? 'Replied "'.trim((string) $t['reply']).'" in '.$t['ms'].' ms via '.$t['endpoint'] : ($t['error'] ?: 'No reply').' ('.$t['endpoint'].')');
+        } else {
+            $add('AI provider', 'fail', 'No AI API key saved (Settings -> AI provider).');
+        }
+
+        foreach (ElevenLabs::diagnose() as $row) $add($row[0], $row[1], $row[2], $row[3] ?? null);
+
+        $mail = (string) config('mail.default');
+        $add('Email (OTP codes)', in_array($mail, ['log', 'array'], true) ? 'warn' : 'ok',
+            in_array($mail, ['log', 'array'], true) ? "MAIL_MAILER is \"$mail\" - codes are only written to the log. Set real MAIL_* values in .env." : "Mail driver: $mail.");
+        $kb = \App\Models\KnowledgeChunk::count();
+        $add('Website data for the assistant', $kb > 0 ? 'ok' : 'warn', $kb > 0 ? "$kb items indexed." : 'Nothing indexed yet - open Automation and rebuild the knowledge base.');
+
+        return response()->json(['rows' => $rows]);
     }
 
     public function update(Request $r)
