@@ -65,6 +65,7 @@ class SettingController extends Controller
                 ['assistant.greeting', 'Greeting line', 'text', 'Shown under "Hello there!". Default: I\'m the Smart Assistant! How can I help you today?'],
                 ['assistant.require_lead', 'Ask new visitors for their details before chatting', 'bool', 'Saved as a lead in Admin → Leads (type "chatbot").'],
                 ['assistant.otp_required', 'Verify email with a one-time code', 'bool', 'Free: the code is sent with your site mail settings (MAIL_* in .env).'],
+                ['assistant.business_facts', 'Business facts the assistant should know', 'textarea', 'Opening hours, showroom/dealer addresses, services, current offers, finance/exchange/warranty policies... one fact per line. The assistant answers questions about your business from this plus the contact details in General.'],
                 ['assistant.extra_instructions', 'Extra personality / business rules', 'textarea', 'e.g. "Always suggest booking a test drive. Never discuss competitor dealerships."'],
                 ['assistant.voice_greeting', 'Spoken greeting', 'text', 'Spoken once when the chat opens (if the speaker is on). {name} = assistant name. Same text for everyone, so it is cached and costs almost no ElevenLabs characters. Default: Hello! I\'m {name}, your car assistant. How can I help you today?'],
                 ['elevenlabs.api_key', 'ElevenLabs API key', 'text', 'Saved and shown as plain text (only admins can see this page). Create it in ElevenLabs -> Developers -> API keys with "Text to Speech" enabled. Without a key the assistant uses the browser\'s own voice.'],
@@ -142,10 +143,33 @@ class SettingController extends Controller
         $mail = (string) config('mail.default');
         $add('Email (OTP codes)', in_array($mail, ['log', 'array'], true) ? 'warn' : 'ok',
             in_array($mail, ['log', 'array'], true) ? "MAIL_MAILER is \"$mail\" - codes are only written to the log. Set real MAIL_* values in .env." : "Mail driver: $mail.");
-        $kb = \App\Models\KnowledgeChunk::count();
-        $add('Website data for the assistant', $kb > 0 ? 'ok' : 'warn', $kb > 0 ? "$kb items indexed." : 'Nothing indexed yet - open Automation and rebuild the knowledge base.');
+        foreach (['site.phone' => 'phone', 'site.email' => 'email', 'site.address' => 'address'] as $k => $label) {
+            if (! Setting::get($k)) $add('Business '.$label, 'warn', "Settings -> General has no $label, so the assistant cannot tell visitors your $label.");
+        }
+        if (! Setting::get('assistant.business_facts')) $add('Business facts', 'warn', 'Empty. Add opening hours, dealer addresses, services and offers in Settings -> Assistant & voice -> Business facts.');
+
+        // What the assistant can read from the database: records in the DB vs records indexed for text search.
+        $indexed = \App\Models\KnowledgeChunk::query()->selectRaw('type, count(*) c')->groupBy('type')->pluck('c', 'type');
+        $db = [
+            'car' => ['New vehicles', \App\Models\VehicleModel::published()->count()],
+            'listing' => ['Used cars', \App\Models\Listing::active()->count()],
+            'article' => ['News articles', \App\Models\Article::published()->count()],
+            'video' => ['Videos', \App\Models\Video::active()->count()],
+            'webpage' => ['Pages', \App\Models\Page::published()->count()],
+        ];
+        foreach ($db as $type => [$label, $count]) {
+            $in = (int) ($indexed[$type] ?? 0);
+            $add('Data: '.$label, $in >= $count ? 'ok' : 'warn', "$count in your database, $in ready for the assistant".($in >= $count ? '.' : ' - click "Rebuild knowledge base now".'));
+        }
+        $add('Live stock lookup', 'ok', 'Questions like "diesel used cars in Pune under 8 lakh" or "how many cars do you have" are answered straight from the database (cars, bikes, trucks, used listings).');
 
         return response()->json(['rows' => $rows]);
+    }
+
+    /** Rebuild the assistant's knowledge base from the database right now. */
+    public function reindex()
+    {
+        return response()->json(['ok' => true, 'items' => KnowledgeBase::reindexAll()]);
     }
 
     public function update(Request $r)

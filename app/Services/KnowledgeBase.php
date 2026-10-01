@@ -52,19 +52,26 @@ class KnowledgeBase
         Listing::active()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         Video::active()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         \App\Models\VehicleModel::published()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
+        \App\Models\Page::published()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         self::syncSiteInfo();
         return $n + 1;
     }
 
-    /** A fixed chunk describing the business so the assistant can answer "who are you / contact" questions. */
+    /** The business chunk: who we are, contact details, and the admin's own "business facts" (hours, dealers, services, offers). */
     public static function syncSiteInfo(): void
     {
         $name = Setting::get('site.name', config('app.name'));
         $content = trim($name.'. '.Setting::get('site.tagline', '').' '.Setting::get('site.about', '')
-            .' Contact email: '.Setting::get('site.email', '').'. Phone: '.Setting::get('site.phone', '').'. Address: '.Setting::get('site.address', '').'.');
+            .' Contact email: '.Setting::get('site.email', '').'. Phone: '.Setting::get('site.phone', '').'. Address: '.Setting::get('site.address', '').'. '
+            .'Website: '.url('/').'. '.Setting::get('assistant.business_facts', ''));
         KnowledgeChunk::updateOrCreate(['type' => 'page', 'ref_id' => 1], [
             'title' => 'About '.$name, 'content' => $content, 'url' => self::relative(route('about')), 'image' => null,
         ]);
+    }
+
+    public static function siteInfo(): ?KnowledgeChunk
+    {
+        return KnowledgeChunk::where('type', 'page')->where('ref_id', 1)->first();
     }
 
     /** @return \Illuminate\Support\Collection<int, KnowledgeChunk> */

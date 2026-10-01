@@ -96,3 +96,16 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 ## ElevenLabs key stored as plain text
 - The ElevenLabs API key is no longer encrypted. It is saved exactly as typed (spaces and quotes from pasting are stripped) and shown in the Settings field, so you can always see what is saved. Other keys (AI provider, YouTube, cron token) are still encrypted and masked.
 - Run `php artisan migrate`: it converts an old encrypted key to plain text when it can still be read. If the old key cannot be read (for example `APP_KEY` changed), just paste it again and save.
+
+## Where the assistant gets its data (DB audit and live lookup)
+**Reads from your database**
+- **Live stock lookup (new):** questions like "diesel used cars in Pune under 8 lakh", "SUVs between 10 and 15 lakh", "how many cars do you have", "cheapest petrol hatchback", "first owner, automatic, after 2018" are answered by querying the database directly: used listings and the new vehicle catalog (cars, bikes, trucks). It understands budget (lakh/crore/k, under/above/between/around), fuel, transmission, city, brand, body type, year, km driven, owner, new vs used, upcoming, counts and cheapest/costliest. The AI is told these are the only matching items, so it quotes real prices and never invents stock. If nothing matches, it says so honestly.
+- **Text search (existing, improved):** new vehicles (now including highlights and FAQ), used listings, news, videos, **custom pages (new)**, and a business chunk with your About, contact details, address and the new **Business facts** box (opening hours, dealer addresses, services, offers, policies). Up to 800 characters per car/listing are shown to the AI (500 for others).
+- **Never read by the assistant:** leads, OTP codes, other visitors' chats, users, passwords. Only the visitor's own first name (and city) is sent to the AI provider, together with public site content.
+
+**Proof and control**
+- Admin -> AI chats & usage -> open a visitor: every answer shows where it came from ("From your database", "From your site content" or "AI general knowledge") and the exact records used.
+- Settings -> **Run setup check** now lists, per type, how many records are in your database and how many are ready for the assistant, and warns when phone, email, address or Business facts are empty.
+- Settings -> **Rebuild knowledge base now** re-reads everything from the database immediately. Run it once after deploying (it also runs daily and whenever a record is saved).
+
+Deploy: `php artisan migrate` (adds `chat_logs.sources`), `php artisan optimize:clear`, then click **Rebuild knowledge base now**.
