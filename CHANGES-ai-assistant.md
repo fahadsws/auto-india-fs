@@ -130,3 +130,35 @@ Deploy: `php artisan migrate` (adds `chat_logs.sources`), `php artisan optimize:
 **Production fix:** the assistant's rate limits now use a separate bucket per endpoint. Before, Laravel's inline `throttle:N,1` shared one counter per IP across routes, so a few chat messages could make booking fail with "Too Many Attempts".
 
 Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan optimize:clear`.
+
+## Conversational sales assistant: Hindi by default, no manual buttons, AI-captured enquiries
+**What changed for visitors**
+- Removed every manual enquiry control: the Select / Test drive / Inspection buttons on car cards, the booking card (date/slot/place form), the tap-to-answer city/budget chips, and the "Book test drive" / "Book showroom visit" starters. Cars are now plain link cards.
+- The AI does the talking. When a visitor shows interest it offers a test drive, inspection or callback, asks only what is missing (one question at a time: car, date, time slot, showroom or home + address; or topic, city, budget, best time to call), repeats it back, and saves it once they say yes. Name, mobile and email are already verified, so it never asks for them again.
+- **Hindi is the default** (Devanagari, in the chat, greeting, spoken replies, speech recognition `hi-IN` and the widget text). A clearly English message switches that visitor to English; Hindi/Hinglish switches back.
+- Hindi messages run the same database lookups: Devanagari fuel, budget (`8 लाख से कम`), cities, brands, "show all" and "pehli wali" are understood (`app/Services/HindiText.php`).
+
+**How a lead is saved (production-safe)**
+- The AI ends its reply with one hidden line `[[LEAD {...}]]` after the visitor confirms. `app/Services/AssistantCapture.php` strips it from the visible reply, validates it against real data (the car must exist in the list shown, date within the next 30 days, valid slot/place, address for home visits) and only then writes the lead.
+- Leads appear in Admin -> Leads as **test drive**, **inspection** or **enquiry** (source "chatbot"), with the car linked, name/phone/email from the verified visitor, and the sales team is emailed. The same visitor asking again about the same car within a day updates the lead.
+- The visitor sees the real reference (TD-/IN-/EQ-id) appended by the server. If the AI claims a booking but details are missing or invalid, nothing is saved and the reply is replaced by "please tell me: date, time..." - it never says "booked" falsely.
+- The running chat lead (type "chatbot") is still enriched with what they want and the car they picked.
+- Removed endpoints: `POST /assistant/select`, `POST /assistant/book`.
+
+**Voice fixes**
+- New chat (refresh button) no longer leaves the voice silent: it greets again by voice and, if the visitor was talking, goes back to listening.
+- A stopped / replaced / reset voice can no longer leave the conversation hanging (the old code awaited a clip that never "ended" after a stop). A clip that arrives after a stop or reset is discarded, not played; leaving the page stops audio and the microphone.
+- After a page refresh the browser forbids audio/mic until one tap, so the mic pulses with "tap the mic to continue" instead of staying silently dead.
+- Spoken text no longer includes emojis; the TTS limit is 900 characters (Hindi replies plus the confirmation line).
+
+**Knowledge: dynamic pages**
+- Published dynamic pages (Admin -> Pages, including FAQ) are searched on every question and used when they match by title or by two or more words, even without words like "price". The assistant also gets a compact list of key pages and your dynamic pages with links, so it can send visitors to the right one. Links in replies are clickable.
+- Rebuild the knowledge base once after deploying (Settings -> Rebuild knowledge base now).
+
+**Defaults raised (Hindi uses more tokens; sales chats are longer)** - all editable in Settings -> Assistant limits: messages/min 8, messages/day 40, tokens/day 40,000, lifetime 200,000, per IP 80,000, spoken characters/day 6,000, max reply 480 tokens (voice 340). Values you already saved are kept.
+
+**Setup notes**
+- ElevenLabs: use `eleven_flash_v2_5` or `eleven_multilingual_v2` (both speak Hindi) and a voice that sounds good in Hindi.
+- Update "Greeting line" and "Spoken greeting" in Settings if you saved English text earlier; the defaults are now Hindi.
+- No migration needed. Run `php artisan optimize:clear`.
+- Tests in `tests/Feature/AssistantTest.php` were rewritten for the new flow (they need MySQL like before).

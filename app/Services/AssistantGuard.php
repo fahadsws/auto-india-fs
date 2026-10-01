@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\RateLimiter;
 class AssistantGuard
 {
     public const DEFAULTS = [
-        'per_min' => 6, 'msgs_day' => 20, 'tokens_day' => 15000, 'tokens_total' => 100000,
-        'ip_tokens_day' => 40000, 'global_tokens_day' => 500000, 'min_gap' => 2, 'tts_chars_day' => 3000,
-        'max_input' => 300, 'max_output' => 300, 'max_output_voice' => 180,
+        'per_min' => 8, 'msgs_day' => 40, 'tokens_day' => 40000, 'tokens_total' => 200000,
+        'ip_tokens_day' => 80000, 'global_tokens_day' => 500000, 'min_gap' => 2, 'tts_chars_day' => 6000,
+        'max_input' => 300, 'max_output' => 480, 'max_output_voice' => 340,
     ];
 
     public static function limit(string $k): int
