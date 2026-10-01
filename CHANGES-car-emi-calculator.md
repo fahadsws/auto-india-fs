@@ -61,3 +61,37 @@ After deploying run: `php artisan migrate` (creates `pages` table and the `pages
 
 ## Verified
 `php artisan test` on MariaDB: 11 tests pass (pages CRUD, draft 404, reserved/duplicate slugs, JSON-LD validity, sitemap, EMI page).
+
+---
+
+# Central SEO admin (Home, EMI and all built-in pages) — what changed
+
+Admin: **SEO** (sidebar → Content) for per-page SEO, and **Settings → SEO & Tracking** for site-wide SEO.
+After deploying run: `php artisan migrate` (creates `seo_entries` and the `seo.manage` permission for Admin and Editor).
+
+## New files
+| Path | Purpose |
+|---|---|
+| `database/migrations/2026_10_01_000005_create_seo_entries_table.php` | `seo_entries` table, one row per built-in page |
+| `database/migrations/2026_10_01_000006_add_seo_permission.php` | `seo.manage` permission |
+| `app/Models/SeoEntry.php` | Page list (home, new cars/bikes/trucks, used, news, videos, compare, EMI, sell, about, contact) + cached lookup by route |
+| `app/Http/Controllers/Admin/SeoController.php` | List, edit, save, reset to defaults |
+| `app/Support/SeoRules.php` | Validation + normalisation shared with Pages |
+| `resources/views/admin/seo/{index,form}.blade.php` | SEO list and editor |
+| `resources/views/admin/partials/seo-fields.blade.php` | SEO & Schema + FAQ tabs (live Google preview), shared by Pages and SEO entries |
+| `resources/views/site/partials/seo-jsonld.blade.php` | JSON-LD output (schema type, FAQPage, breadcrumb, custom) shared by Pages and layout |
+| `tests/Feature/SeoTest.php` | Feature tests |
+
+## Modified files
+| Path | Change |
+|---|---|
+| `resources/views/site/layout.blade.php` | SEO entry overrides title, description, keywords, canonical, robots, Open Graph, Twitter tags; verification tags, GA4/GTM, Organization schema on home |
+| `app/Providers/AppServiceProvider.php` | Shares the current page's SEO entry with site views (safe before migrate) |
+| `resources/views/site/emi.blade.php` | Uses the SEO entry's FAQ when set (no duplicate FAQPage) |
+| `resources/views/site/page.blade.php`, `resources/views/admin/pages/form.blade.php`, `app/Http/Controllers/Admin/PageController.php`, `app/Models/Page.php` | Use the shared SEO partials and rules |
+| `app/Http/Controllers/Admin/SettingController.php` | New "SEO & Tracking" group (default description/OG image, Twitter, Organization schema, social profiles, Search Console/Bing codes, GA4/GTM, extra robots.txt) |
+| `app/Http/Controllers/Site/PageController.php` | Sitemap built from the page list, noindex pages dropped; extra robots.txt lines |
+| `resources/views/admin/layout.blade.php`, `resources/views/admin/home-settings.blade.php`, `routes/web.php`, `database/seeders/DatabaseSeeder.php` | Sidebar item, "Home page SEO" shortcut, routes, permission |
+
+## Verified
+`php artisan test` on MariaDB: 16 tests pass.

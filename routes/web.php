@@ -87,6 +87,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('pages', Admin\PageController::class)->except(['show']);
         });
 
+        Route::middleware('permission:seo.manage')->group(function () {
+            Route::get('seo', [Admin\SeoController::class, 'index'])->name('seo.index');
+            Route::get('seo/{key}', [Admin\SeoController::class, 'edit'])->name('seo.edit');
+            Route::put('seo/{key}', [Admin\SeoController::class, 'update'])->name('seo.update');
+            Route::delete('seo/{key}', [Admin\SeoController::class, 'destroy'])->name('seo.destroy');
+        });
+
         Route::middleware('permission:categories.manage')->group(function () {
             Route::get('categories/data', [Admin\CategoryController::class, 'data'])->name('categories.data');
             Route::post('categories/bulk', [Admin\CategoryController::class, 'bulk'])->name('categories.bulk');

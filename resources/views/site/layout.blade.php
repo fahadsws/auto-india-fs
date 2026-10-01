@@ -1,8 +1,16 @@
 @php
   $siteName = \App\Models\Setting::get('site.name', config('app.name'));
-  $pageTitle = trim($__env->yieldContent('title')) ?: $siteName . ' — ' . \App\Models\Setting::get('site.tagline', 'Car news, reviews & used cars');
-  $pageDesc = trim($__env->yieldContent('description')) ?: \App\Models\Setting::get('site.about', '');
-  $pageImage = trim($__env->yieldContent('image')) ?: asset('img/placeholder.svg');
+  $seo = $seo ?? null;
+  $pageTitle = $seo?->meta_title ?: trim($__env->yieldContent('title')) ?: $siteName . ' — ' . \App\Models\Setting::get('site.tagline', 'Car news, reviews & used cars');
+  $pageDesc = $seo?->meta_description ?: trim($__env->yieldContent('description')) ?: \App\Models\Setting::get('seo.default_description') ?: \App\Models\Setting::get('site.about', '');
+  $pageImage = $seo?->og_image ?: trim($__env->yieldContent('image')) ?: \App\Models\Setting::get('seo.default_og_image') ?: asset('img/placeholder.svg');
+  $canonical = $seo?->canonical_url ?: trim($__env->yieldContent('canonical')) ?: url()->current();
+  $robotsTag = $seo && $seo->robots !== 'index,follow' ? $seo->robots : trim($__env->yieldContent('robots'));
+  $ogTitle = $seo?->og_title ?: trim($__env->yieldContent('og_title')) ?: $pageTitle;
+  $ogDesc = $seo?->og_description ?: trim($__env->yieldContent('og_description')) ?: $pageDesc;
+  $twitter = \App\Models\Setting::get('seo.twitter_handle');
+  $gtm = trim((string) \App\Models\Setting::get('seo.gtm_id'));
+  $ga4 = trim((string) \App\Models\Setting::get('seo.ga4_id'));
   $assistantOn = \App\Models\Setting::bool('assistant.enabled', true);
   $asstName = \App\Models\Setting::get('assistant.name', 'Auto Guide');
 @endphp
@@ -14,17 +22,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ $pageTitle }}</title>
   <meta name="description" content="{{ \Illuminate\Support\Str::limit($pageDesc, 160, '') }}">
-  <link rel="canonical" href="{{ trim($__env->yieldContent('canonical')) ?: url()->current() }}">
-  @hasSection('robots')<meta name="robots" content="@yield('robots')">@endif
+  @if ($seo?->meta_keywords)<meta name="keywords" content="{{ $seo->meta_keywords }}">@endif
+  <link rel="canonical" href="{{ $canonical }}">
+  @if ($robotsTag)<meta name="robots" content="{{ $robotsTag }}">@endif
+  @if ($v = \App\Models\Setting::get('seo.google_verification'))<meta name="google-site-verification" content="{{ $v }}">@endif
+  @if ($v = \App\Models\Setting::get('seo.bing_verification'))<meta name="msvalidate.01" content="{{ $v }}">@endif
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="theme-color" content="#e11d2e">
   <meta property="og:site_name" content="{{ $siteName }}">
-  <meta property="og:title" content="{{ trim($__env->yieldContent('og_title')) ?: $pageTitle }}">
-  <meta property="og:description" content="{{ \Illuminate\Support\Str::limit(trim($__env->yieldContent('og_description')) ?: $pageDesc, 200, '') }}">
+  <meta property="og:title" content="{{ $ogTitle }}">
+  <meta property="og:description" content="{{ \Illuminate\Support\Str::limit($ogDesc, 200, '') }}">
   <meta property="og:image" content="{{ $pageImage }}">
   <meta property="og:type" content="@yield('og_type', 'website')">
   <meta property="og:url" content="{{ url()->current() }}">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ $ogTitle }}">
+  <meta name="twitter:description" content="{{ \Illuminate\Support\Str::limit($ogDesc, 200, '') }}">
+  <meta name="twitter:image" content="{{ $pageImage }}">
+  @if ($twitter)<meta name="twitter:site" content="{{ '@'.ltrim($twitter, '@') }}">@endif
   <link rel="alternate" type="application/rss+xml" title="{{ $siteName }} news" href="{{ route('feed') }}">
   <link rel="icon" href="{{ asset('vuexy/img/favicon/favicon.ico') }}">
   <script>try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
@@ -35,6 +50,14 @@
   <link rel="stylesheet" href="{{ asset('vuexy/vendor/fonts/tabler-icons.full.css') }}">
   <link rel="stylesheet" href="{{ asset('css/home-new.css') }}">
   <link rel="stylesheet" href="{{ asset('css/site-pages.css') }}">
+  @if ($gtm)<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer',@json($gtm));</script>@endif
+  @if ($ga4 && ! $gtm)<script async src="https://www.googletagmanager.com/gtag/js?id={{ $ga4 }}"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config',@json($ga4));</script>@endif
+  @if (request()->routeIs('home'))
+  <script type="application/ld+json">{!! json_encode(array_filter(['@context' => 'https://schema.org', '@type' => 'Organization', 'name' => \App\Models\Setting::get('seo.org_name') ?: $siteName, 'url' => url('/'),
+    'logo' => \App\Models\Setting::get('seo.org_logo') ?: null,
+    'sameAs' => array_values(array_filter(array_map('trim', preg_split('/\R/', (string) \App\Models\Setting::get('seo.social_profiles'))))) ?: null]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+  @endif
+  @if ($seo)@include('site.partials.seo-jsonld', ['m' => $seo, 'name' => $pageTitle, 'url' => $canonical, 'desc' => $pageDesc, 'image' => $pageImage, 'crumb' => request()->routeIs('home') ? null : \App\Models\SeoEntry::PAGES[$seo->route_key][0]])@endif
   @stack('head')
 </head>
 

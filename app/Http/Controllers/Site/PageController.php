@@ -92,7 +92,7 @@ class PageController extends Controller
 
     public function sitemap()
     {
-        $urls = collect([route('home'), route('news.index'), route('newcars.index'), route('newbikes.index'), route('newtrucks.index'), route('cars.index'), route('videos.index'), route('about'), route('contact'), route('sell'), route('emi')])
+        $urls = collect(\App\Models\SeoEntry::PAGES)->filter(fn ($p, $key) => ! \App\Models\SeoEntry::all_()->get($key)?->isNoindex())->map(fn ($p) => route($p[1]))->values()
             ->map(fn ($u) => ['loc' => $u, 'lastmod' => now()->toAtomString()])
             ->merge(\App\Models\Page::published()->where('robots', 'not like', 'noindex%')->latest('updated_at')->take(1000)->get()->map(fn ($p) => ['loc' => $p->url, 'lastmod' => $p->updated_at->toAtomString()]))
             ->merge(\App\Models\VehicleModel::published()->latest('updated_at')->take(1000)->get()->map(fn ($c) => ['loc' => $c->url, 'lastmod' => $c->updated_at->toAtomString()]))
@@ -109,6 +109,7 @@ class PageController extends Controller
         $txt = "User-agent: *\nDisallow: /admin\nDisallow: /cron\nDisallow: /assistant/\nAllow: /\n\n";
         foreach ($ai as $bot) $txt .= "User-agent: $bot\nAllow: /\nDisallow: /admin\nDisallow: /cron\n\n";
         $txt .= 'Sitemap: '.route('sitemap')."\n";
+        if (filled($extra = \App\Models\Setting::get('seo.robots_extra'))) $txt .= "\n".trim($extra)."\n";
         return response($txt)->header('Content-Type', 'text/plain');
     }
 

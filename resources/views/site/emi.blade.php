@@ -4,12 +4,12 @@
 
 @push('head')
 <script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'WebApplication', 'name' => 'Car Loan EMI Calculator', 'url' => route('emi'), 'applicationCategory' => 'FinanceApplication', 'operatingSystem' => 'Any', 'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'INR']], JSON_UNESCAPED_SLASHES) !!}</script>
-@php($faq = [
+@php($faq = ($seo?->faqItems()) ?: [
   ['q' => 'How is car loan EMI calculated?', 'a' => 'EMI = P × r × (1+r)^n / ((1+r)^n − 1), where P is the loan amount, r is the monthly interest rate (annual rate ÷ 12 ÷ 100) and n is the number of monthly instalments.'],
   ['q' => 'Does a longer tenure reduce my EMI?', 'a' => 'Yes, a longer tenure lowers the monthly EMI, but you pay more total interest over the life of the loan.'],
   ['q' => 'What is a good down payment for a car loan?', 'a' => 'Most buyers pay 10–20% of the on-road price upfront. A larger down payment reduces the loan amount, EMI and total interest.'],
 ])
-<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => collect($faq)->map(fn ($f) => ['@type' => 'Question', 'name' => $f['q'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f['a']]])->values()->all()], JSON_UNESCAPED_SLASHES) !!}</script>
+@unless ($seo?->faqItems())<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => collect($faq)->map(fn ($f) => ['@type' => 'Question', 'name' => $f['q'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f['a']]])->values()->all()], JSON_UNESCAPED_SLASHES) !!}</script>@endunless
 @endpush
 
 @section('content')
