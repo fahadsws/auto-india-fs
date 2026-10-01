@@ -67,7 +67,7 @@ class SettingController extends Controller
                 ['assistant.otp_required', 'Verify email with a one-time code', 'bool', 'Free: the code is sent with your site mail settings (MAIL_* in .env).'],
                 ['assistant.extra_instructions', 'Extra personality / business rules', 'textarea', 'e.g. "Always suggest booking a test drive. Never discuss competitor dealerships."'],
                 ['assistant.voice_greeting', 'Spoken greeting', 'text', 'Spoken once when the chat opens (if the speaker is on). {name} = assistant name. Same text for everyone, so it is cached and costs almost no ElevenLabs characters. Default: Hello! I\'m {name}, your car assistant. How can I help you today?'],
-                ['elevenlabs.api_key', 'ElevenLabs API key', 'secret', 'Create it in ElevenLabs -> Developers -> API keys with "Text to Speech" enabled. Without a key the assistant uses the browser\'s own voice.'],
+                ['elevenlabs.api_key', 'ElevenLabs API key', 'text', 'Saved and shown as plain text (only admins can see this page). Create it in ElevenLabs -> Developers -> API keys with "Text to Speech" enabled. Without a key the assistant uses the browser\'s own voice.'],
                 ['elevenlabs.voice_id', 'ElevenLabs voice ID', 'text', 'Must come from MY VOICES (ElevenLabs -> Voices -> My Voices -> ID). On the free plan a Voice-Library voice only works through the API after you click "Add to my voices". Click "Run setup check" below to hear it.'],
                 ['elevenlabs.model', 'ElevenLabs model', 'text', 'eleven_flash_v2_5 (cheapest, fastest, supports Hindi) or eleven_multilingual_v2 (richest, best for Hinglish, uses more characters).'],
                 ['elevenlabs.stability', 'Voice stability (0-1)', 'number', 'Default 0.5. Lower = more expressive, higher = steadier.'],
@@ -155,6 +155,7 @@ class SettingController extends Controller
                 $input = $r->input(str_replace('.', '__', $key));
                 if ($type === 'bool') { Setting::put($key, $r->boolean(str_replace('.', '__', $key)) ? '1' : '0'); continue; }
                 if ($type === 'secret') { if ($input !== null && $input !== '' && ! str_starts_with($input, '••')) Setting::put($key, trim($input)); continue; }
+                if ($key === 'elevenlabs.api_key' && $input !== null) $input = trim($input, " \t\n\r\0\x0B\"'");   // pasted keys often carry spaces/quotes
                 Setting::put($key, $input === null ? null : trim($input));
             }
         }

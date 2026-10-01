@@ -92,3 +92,7 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 3. Admin -> Settings -> Assistant & voice: paste the key and the voice ID. Model: `eleven_flash_v2_5` (cheap and fast, supports Hindi) or `eleven_multilingual_v2` (richest, best for Hinglish, uses more characters). Tune stability/similarity/speed if you like.
 4. Click **Save settings**, then **Run setup check**. Every row should be green, and you should hear a sample in your voice.
 5. The free plan has about 10,000 characters a month. Replies are limited per visitor per day (Assistant limits) and every repeated sentence is served from cache.
+
+## ElevenLabs key stored as plain text
+- The ElevenLabs API key is no longer encrypted. It is saved exactly as typed (spaces and quotes from pasting are stripped) and shown in the Settings field, so you can always see what is saved. Other keys (AI provider, YouTube, cron token) are still encrypted and masked.
+- Run `php artisan migrate`: it converts an old encrypted key to plain text when it can still be read. If the old key cannot be read (for example `APP_KEY` changed), just paste it again and save.
