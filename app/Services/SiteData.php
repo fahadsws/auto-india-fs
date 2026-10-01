@@ -38,7 +38,8 @@ class SiteData
             $unit = $m[4]; $f['price_min'] = $u($m[1], $m[2] ?: $unit); $f['price_max'] = $u($m[3], $unit);
         } elseif (preg_match('/(?:around|approx(?:imately)?|about)\s*'.$p.self::NUM.'\s*'.self::UNIT.'\b/', $t, $m)) {
             $v = $u($m[1], $m[2]); $f['price_min'] = (int) ($v * 0.8); $f['price_max'] = (int) ($v * 1.2);
-        } elseif (preg_match('/(?:above|over|more than|min(?:imum)?|starting from|at least)\s*'.$p.self::NUM.'\s*'.self::UNIT.'\b/', $t, $m)) {
+        } elseif (preg_match('/(?:above|over|more than|min(?:imum)?|starting from|at least)\s*'.$p.self::NUM.'\s*'.self::UNIT.'\b/', $t, $m)
+            || preg_match('/\b'.self::NUM.'\s*'.self::UNIT.'\s*(?:se\s*)?(?:upar|zyada|jyada|above|plus|\+)/', $t, $m)) {
             $f['price_min'] = $u($m[1], $m[2]);
         } elseif (preg_match('/(?:under|below|within|upto|up to|less than|max(?:imum)?|budget(?: of| is)?)\s*'.$p.self::NUM.'\s*'.self::UNIT.'\b/', $t, $m)
             || preg_match('/\b'.self::NUM.'\s*(crores?|cr|lakhs?|lacs?)\b/', $t, $m)) {
@@ -53,8 +54,8 @@ class SiteData
         if (preg_match('/\b(automatic|auto|amt|cvt|dct|dsg)\b/', $t)) $f['transmission'] = 'auto';
         elseif (preg_match('/\bmanual\b/', $t)) $f['transmission'] = 'manual';
 
-        if (preg_match('/\b(used|second[- ]?hand|pre[- ]?owned|certified)\b/', $t)) $f['type'] = 'used';
-        elseif (preg_match('/\b(new cars?|brand new|new models?|upcoming|launch(?:es|ed)?|new bikes?|new trucks?)\b/', $t)) $f['type'] = 'new';
+        if (preg_match('/\b(used|second[- ]?hand|pre[- ]?owned|certified|purani|puraani|purana|puraana)\b/', $t)) $f['type'] = 'used';
+        elseif (preg_match('/\b(new cars?|brand new|new models?|upcoming|launch(?:es|ed)?|new bikes?|new trucks?|nayi gaa?d(?:i|iyan)|nai gaa?d(?:i|iyan)|naya gaa?di)\b/', $t)) $f['type'] = 'new';
 
         if (preg_match('/\b(bikes?|motorcycles?|scooters?|two[- ]?wheelers?)\b/', $t)) $f['vehicle'] = 'bike';
         elseif (preg_match('/\btrucks?\b/', $t)) $f['vehicle'] = 'truck';
@@ -81,7 +82,7 @@ class SiteData
         elseif (preg_match('/\b(costliest|most expensive|highest price|priciest|luxury|premium)\b/', $t)) $f['sort'] = 'desc';
         if (preg_match('/\b(how many|number of|count of|total|kitni|kitne)\b/', $t)) $f['count'] = true;
 
-        $f['_vehicle_word'] = (bool) preg_match('/\b(cars?|bikes?|trucks?|suvs?|sedans?|hatchbacks?|muvs?|vehicles?|models?|stock|listings?|inventory|variants?)\b/', $t);
+        $f['_vehicle_word'] = (bool) preg_match('/\b(cars?|gaa?d(?:i|iyan|iyaan)|bikes?|trucks?|suvs?|sedans?|hatchbacks?|muvs?|vehicles?|models?|stock|listings?|inventory|variants?)\b/', $t);
         return $f;
     }
 
@@ -105,31 +106,33 @@ class SiteData
         $wantUsed = $type !== 'new' && $vehicle === 'car';
         $wantNew = $type !== 'used';
 
-        $parts = []; $links = []; $sources = []; $found = 0;
+        $parts = []; $links = []; $sources = []; $items = []; $found = 0; $totals = ['used' => 0, 'new' => 0];
         $desc = self::describe($f);
 
         if ($wantUsed) {
             $q = self::usedQuery($f);
-            $total = (clone $q)->count(); $found += $total;
+            $total = (clone $q)->count(); $found += $total; $totals['used'] = $total;
             $rows = self::order($q, 'price', $f)->limit(5)->get();
             $all = Listing::active()->count();
             $parts[] = $total
                 ? "USED CARS IN OUR STOCK matching ($desc): $total".($total > 5 ? ' (showing the first 5)' : '').":\n".$rows->map(fn ($l) => '- '.self::usedLine($l))->implode("\n")
                 : "USED CARS: none in our stock match ($desc). Total used cars in stock right now: $all.";
-            foreach ($rows->take(3) as $l) { $links[] = ['title' => $l->title, 'url' => $l->url, 'image' => $l->image_url, 'type' => 'listing', 'price' => $l->price_label]; $sources[] = ['type' => 'listing', 'title' => $l->title, 'url' => $l->url]; }
+            foreach ($rows as $l) { $items[] = AssistantMemory::item($l); }
+            foreach ($rows->take(3) as $l) { $links[] = ['title' => $l->title, 'url' => $l->url, 'image' => $l->image_url, 'type' => 'listing', 'k' => 'l', 'id' => $l->id, 'price' => $l->price_label]; $sources[] = ['type' => 'listing', 'title' => $l->title, 'url' => $l->url]; }
         }
         if ($wantNew) {
             $q = self::newQuery($f, $vehicle);
-            $total = (clone $q)->count(); $found += $total;
+            $total = (clone $q)->count(); $found += $total; $totals['new'] = $total;
             $rows = self::order($q, 'price_min', $f)->limit(5)->get();
             $label = config("vehicles.$vehicle.label", 'Car');
             $parts[] = $total
                 ? "NEW {$label} MODELS IN OUR CATALOG matching ($desc): $total".($total > 5 ? ' (showing the first 5)' : '').":\n".$rows->map(fn ($m) => '- '.self::newLine($m))->implode("\n")
                 : "NEW {$label} MODELS: none in our catalog match ($desc).";
-            foreach ($rows->take(3) as $m) { $links[] = ['title' => $m->full_name, 'url' => $m->url, 'image' => $m->hero_url, 'type' => 'car', 'price' => $m->price_label]; $sources[] = ['type' => 'car', 'title' => $m->full_name, 'url' => $m->url]; }
+            foreach ($rows as $m) { $items[] = AssistantMemory::item($m); }
+            foreach ($rows->take(3) as $m) { $links[] = ['title' => $m->full_name, 'url' => $m->url, 'image' => $m->hero_url, 'type' => 'car', 'k' => 'c', 'id' => $m->id, 'price' => $m->price_label]; $sources[] = ['type' => 'car', 'title' => $m->full_name, 'url' => $m->url]; }
         }
 
-        return ['context' => implode("\n\n", $parts), 'links' => array_slice($links, 0, 3), 'sources' => $sources, 'found' => $found];
+        return ['context' => implode("\n\n", $parts), 'links' => array_slice($links, 0, 3), 'sources' => $sources, 'found' => $found, 'items' => array_slice($items, 0, 5), 'totals' => $totals];
     }
 
     private static function usedQuery(array $f)
@@ -199,6 +202,23 @@ class SiteData
         return $b ? implode(', ', $b) : 'no filters';
     }
 
+    /** Cities with used stock, biggest first (for tap-to-answer chips). */
+    public static function cityOptions(int $n = 6): array
+    {
+        return Cache::remember('asst:cityopts:'.$n, 300, fn () => Listing::active()->whereNotNull('city')->where('city', '!=', '')->selectRaw('city, count(*) c')->groupBy('city')->orderByDesc('c')->limit($n)->pluck('city')->all());
+    }
+
+    /** Budget chips for the used/new search: [label, text the parser understands]. */
+    public static function budgetOptions(string $vehicle = 'car'): array
+    {
+        $l = fn ($v) => rtrim(rtrim(number_format($v / 1e5, 2), '0'), '.');
+        return collect(Filters::budgets($vehicle))->map(function ($b) use ($l) {
+            [$label, $lo, $hi] = $b;
+            $text = ! $lo ? 'under '.$l($hi).' lakh' : ($hi ? 'between '.$l($lo).' and '.$l($hi).' lakh' : 'above '.$l($lo).' lakh');
+            return ['label' => $label, 'text' => 'budget '.$text];
+        })->values()->all();
+    }
+
     private static function cities(): array
     {
         return Cache::remember('asst:cities', 600, fn () => collect(Filters::CITIES)->merge(Listing::active()->whereNotNull('city')->distinct()->limit(200)->pluck('city'))->filter()->unique()->values()->all());
@@ -212,5 +232,39 @@ class SiteData
     private static function bodies(): array
     {
         return Cache::remember('asst:bodies', 600, fn () => VehicleBodyType::where('is_active', true)->pluck('name', 'id')->all());
+    }
+
+    /** The real, filtered listing page for these filters (used cars, or new cars/bikes/trucks). */
+    public static function browseUrl(array $f): string
+    {
+        $vehicle = $f['vehicle'] ?? 'car';
+        $bands = function (string $v) use ($f) {
+            $lo = $f['price_min'] ?? 0; $hi = $f['price_max'] ?? null;
+            return collect(Filters::budgets($v))->filter(fn ($b, $k) => ! (isset($f['price_min']) || isset($f['price_max'])) ? false : (($b[2] === null || $b[2] > $lo) && ($hi === null || $b[1] < $hi)))->keys()->all();
+        };
+
+        if (($f['type'] ?? null) !== 'new' && $vehicle === 'car') {                      // used cars: /cars?brand[]=&fuel[]=&city[]=&transmission[]=&budget[]=&sort=
+            $q = [];
+            if (! empty($f['brand'])) $q['brand'] = [$f['brand']];
+            if (! empty($f['fuel'])) $q['fuel'] = \App\Models\VehicleFuel::where(fn ($w) => collect($f['fuel'])->each(fn ($n) => $w->orWhere('name', 'like', "%$n%")))->pluck('name')->all();
+            if (! empty($f['city'])) $q['city'] = [$f['city']];
+            if (! empty($f['transmission'])) {
+                $vals = Listing::active()->whereNotNull('transmission')->distinct()->pluck('transmission');
+                $q['transmission'] = $vals->filter(fn ($v) => $f['transmission'] === 'auto' ? preg_match('/auto|amt|cvt|dct/i', $v) : preg_match('/manual/i', $v))->values()->all();
+            }
+            if ($b = $bands('car')) $q['budget'] = $b;
+            if (($f['sort'] ?? null) === 'desc') $q['sort'] = 'price_desc';
+            elseif (($f['sort'] ?? null) === 'asc' || isset($f['price_max'])) $q['sort'] = 'price_asc';
+            return route('cars.index', array_filter($q, fn ($v) => $v !== []));
+        }
+
+        $route = ['car' => 'newcars.index', 'bike' => 'newbikes.index', 'truck' => 'newtrucks.index'][$vehicle] ?? 'newcars.index';
+        $q = [];                                                                          // new vehicles: /new-cars?brand[]=id&body_type[]=id&fuel[]=id&budget[]=
+        if (! empty($f['brand_id'])) $q['brand'] = [$f['brand_id']];
+        if (! empty($f['body_id'])) $q['body_type'] = [$f['body_id']];
+        if (! empty($f['fuel'])) $q['fuel'] = \App\Models\VehicleFuel::where(fn ($w) => collect($f['fuel'])->each(fn ($n) => $w->orWhere('name', 'like', "%$n%")))->pluck('id')->all();
+        if ($b = $bands($vehicle)) $q['budget'] = $b;
+        if (($f['status'] ?? null)) $q['status'] = $f['status'];
+        return route($route, array_filter($q, fn ($v) => $v !== []));
     }
 }

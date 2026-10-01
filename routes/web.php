@@ -43,12 +43,15 @@ Route::get('/llms.txt', [Site\PageController::class, 'llms'])->name('llms');
 Route::get('/feed.xml', [Site\PageController::class, 'feed'])->name('feed');
 
 Route::get('/assistant', [Site\AssistantController::class, 'page'])->name('assistant');
-Route::get('/assistant/me', [Site\AssistantLeadController::class, 'me'])->middleware('throttle:30,1')->name('assistant.me');
-Route::post('/assistant/lead', [Site\AssistantLeadController::class, 'submit'])->middleware('throttle:5,1')->name('assistant.lead');
-Route::post('/assistant/verify', [Site\AssistantLeadController::class, 'verify'])->middleware('throttle:10,1')->name('assistant.verify');
-Route::post('/assistant/feedback', [Site\AssistantLeadController::class, 'feedback'])->middleware('throttle:5,1')->name('assistant.feedback');
-Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware(['throttle:30,1', 'assistant.session'])->name('assistant.chat');
-Route::post('/assistant/tts', [Site\AssistantController::class, 'tts'])->middleware(['throttle:15,1', 'assistant.session'])->name('assistant.tts');
+Route::get('/assistant/me', [Site\AssistantLeadController::class, 'me'])->middleware('throttle:assistant-me')->name('assistant.me');
+Route::post('/assistant/lead', [Site\AssistantLeadController::class, 'submit'])->middleware('throttle:assistant-lead')->name('assistant.lead');
+Route::post('/assistant/verify', [Site\AssistantLeadController::class, 'verify'])->middleware('throttle:assistant-verify')->name('assistant.verify');
+Route::post('/assistant/feedback', [Site\AssistantLeadController::class, 'feedback'])->middleware('throttle:assistant-feedback')->name('assistant.feedback');
+Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware(['throttle:assistant-chat', 'assistant.session'])->name('assistant.chat');
+Route::post('/assistant/select', [Site\AssistantBookingController::class, 'select'])->middleware(['throttle:assistant-select', 'assistant.session'])->name('assistant.select');
+Route::post('/assistant/book', [Site\AssistantBookingController::class, 'book'])->middleware(['throttle:assistant-book', 'assistant.session'])->name('assistant.book');
+Route::post('/assistant/reset', [Site\AssistantBookingController::class, 'reset'])->middleware(['throttle:assistant-reset', 'assistant.session'])->name('assistant.reset');
+Route::post('/assistant/tts', [Site\AssistantController::class, 'tts'])->middleware(['throttle:assistant-tts', 'assistant.session'])->name('assistant.tts');
 
 /* Cron: hit this URL from any uptime pinger / cPanel cron (every 5-15 min). Each task keeps its own interval. */
 Route::match(['get', 'post'], '/cron/{token}/{task?}', Site\CronController::class)->middleware('throttle:30,1')->name('cron');

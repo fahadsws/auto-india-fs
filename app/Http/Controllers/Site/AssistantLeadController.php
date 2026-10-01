@@ -29,6 +29,8 @@ class AssistantLeadController extends Controller
             'gate' => $gate && ! $ok,
             'verified' => (bool) $ok && (bool) $s,
             'name' => $s?->lead?->name,
+            'phone' => $ok ? $s?->lead?->phone : null,
+            'city' => $ok ? $s?->lead?->city : null,
             'left' => $s ? max(0, AssistantGuard::limit('msgs_day') - ($s->usage_date?->isToday() ? $s->messages_today : 0)) : AssistantGuard::limit('msgs_day'),
             'token' => $ok ? $s?->token : null,
         ]);

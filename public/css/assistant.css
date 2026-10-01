@@ -124,7 +124,7 @@ html[data-theme=dark] .aw-btn{background:#fff;color:#000}
 
 /* chat */
 .aw-chat{position:relative}
-.aw-scroll{-webkit-mask-image:linear-gradient(#000 calc(100% - 16px),transparent);mask-image:linear-gradient(#000 calc(100% - 16px),transparent);flex:1;overflow-y:auto;padding:56px 16px 6px;scroll-behavior:smooth;display:flex;flex-direction:column;gap:10px}
+.aw-scroll{-webkit-mask-image:linear-gradient(transparent 0,#000 54px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(transparent 0,#000 54px,#000 calc(100% - 16px),transparent);flex:1;overflow-y:auto;padding:56px 16px 6px;scroll-behavior:smooth;display:flex;flex-direction:column;gap:10px}
 .aw-hero{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:0}
 .aw-hero .aw-bubble{width:92px;height:92px;margin-bottom:2px}
 .aw-hero.gone{display:none}
@@ -203,3 +203,35 @@ html[data-theme=dark] .aw-btn{background:#fff;color:#000}
   .aw-page .aw-panel{height:78dvh;border-radius:22px}
 }
 @media (prefers-reduced-motion:reduce){.aw *,.aw *::before,.aw *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ---- car cards, quick replies, booking card ---- */
+.aw-cars{display:flex;flex-direction:column;gap:8px;align-self:stretch;max-width:94%;animation:aw-msg .4s both}
+.aw-car{border:1.5px solid var(--aw-line);border-radius:16px;background:var(--aw-bg);overflow:hidden;transition:.2s}
+.aw-car.sel{border-color:var(--aw-pri);box-shadow:0 0 0 3px rgba(47,91,255,.15)}
+.aw-car-top{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 8px;color:var(--aw-ink);text-decoration:none;font:600 13.5px/1.25 var(--f,sans-serif)}
+.aw-car-top img{width:58px;height:44px;border-radius:9px;object-fit:cover;background:var(--aw-soft)}
+.aw-car-top .ti{margin-left:auto;color:var(--aw-pri)}
+.aw-car-act{display:flex;gap:6px;padding:0 8px 8px}
+.aw-car-act button{flex:1;border:1px solid var(--aw-line);background:var(--aw-soft);color:var(--aw-ink);border-radius:10px;padding:7px 4px;font:600 12px var(--f,sans-serif);transition:.2s}
+.aw-car-act button:hover{background:#000;color:#fff;border-color:#000}
+.aw-car.sel .aw-car-act button[data-a=select]{background:var(--aw-pri);color:#fff;border-color:var(--aw-pri)}
+.aw-quick{display:flex;flex-wrap:wrap;gap:7px;align-self:flex-start;max-width:94%;animation:aw-msg .35s both}
+.aw-quick button{border:1.5px solid var(--aw-pri);background:transparent;color:var(--aw-pri);border-radius:999px;padding:7px 13px;font:600 13px var(--f,sans-serif);transition:.2s}
+.aw-quick button:hover{background:var(--aw-pri);color:#fff;transform:translateY(-1px)}
+.aw-go{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:#000;color:#fff;text-decoration:none;border-radius:12px;padding:10px 16px;font:700 13.5px var(--f,sans-serif);animation:aw-msg .35s both}
+html[data-theme=dark] .aw-go{background:#fff;color:#000}
+.aw-book{align-self:stretch;max-width:96%;display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:18px;background:var(--aw-bg);border:1.5px solid var(--aw-line);box-shadow:0 10px 26px -16px rgba(0,0,0,.4);animation:aw-msg .4s both}
+.aw-book>b{font:800 14.5px var(--f,sans-serif)}
+.aw-book label{display:block;font:600 12px var(--f,sans-serif);color:var(--aw-mut)}
+.aw-book input[type=date],.aw-book input[type=text]{width:100%;margin-top:4px;border:1px solid var(--aw-line);background:var(--aw-soft);color:var(--aw-ink);border-radius:10px;padding:9px 11px;font:500 14px var(--f,sans-serif);outline:0}
+.aw-book input:focus{border-color:var(--aw-pri);box-shadow:0 0 0 3px rgba(47,91,255,.15)}
+.aw-pills{display:flex;gap:6px}
+.aw-pills label{flex:1;margin:0}
+.aw-pills input{position:absolute;opacity:0;pointer-events:none}
+.aw-pills span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 4px;border:1px solid var(--aw-line);border-radius:10px;background:var(--aw-soft);color:var(--aw-ink);font:600 12.5px var(--f,sans-serif);cursor:pointer;transition:.2s;text-align:center}
+.aw-pills small{font-weight:500;font-size:10.5px;color:var(--aw-mut)}
+.aw-pills input:checked+span{background:#000;color:#fff;border-color:#000}
+.aw-pills input:checked+span small{color:#cbd5e1}
+html[data-theme=dark] .aw-pills input:checked+span{background:#fff;color:#000}
+.aw-book .aw-btn{min-height:46px;padding:11px 14px;font-size:14.5px}
+.aw-book .aw-fine{text-align:center;margin:0}

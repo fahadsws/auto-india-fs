@@ -109,3 +109,24 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 - Settings -> **Rebuild knowledge base now** re-reads everything from the database immediately. Run it once after deploying (it also runs daily and whenever a record is saved).
 
 Deploy: `php artisan migrate` (adds `chat_logs.sources`), `php artisan optimize:clear`, then click **Rebuild knowledge base now**.
+
+## Conversation memory, bookings and page navigation
+**Remembers the conversation (cheaply)**
+- Each visitor now has a small saved state: what they are looking for (used/new, city, budget, fuel...), the cars just shown, the car they picked, and any booking. The AI receives these few lines instead of long chat history (the last 3 messages plus the summary), so it never forgets "used car in Pune" or which car was chosen, and every request stays small. Stand-alone answers are still cached.
+- "Mujhe used car chaiye" -> the assistant asks which city/area (zero tokens, English or Hinglish, with tap-to-answer chips). "Pune" -> it remembers the request and shows the real Pune cars. "Pehli wali", "second one", "ye wali" or a model name picks one of the shown cars. "Start over / koi aur" resets.
+- What the visitor wants and the car they pick are written to their lead (Admin -> Leads, type "chatbot"), so sales sees it even without a booking.
+
+**Test drive / inspection leads**
+- Every car card has **Select**, **Test drive** and **Inspection** buttons (the title opens the car page in a new tab so the chat is not lost). Saying "test drive book karni hai" for the selected car opens the same booking card in the chat: date (next 30 days), time slot, at showroom or at my address, optional note.
+- Confirming creates a real lead in Admin -> Leads with type **test drive** or **inspection**, the car linked, the visitor's name/phone/email, the slot and place, and emails your sales team. Booking the same car again within a day updates the request instead of duplicating it. The visitor gets a reference like TD-123.
+
+**Opens the real pages**
+- "Muje sare used car dikhao" / "show all used cars" opens the actual filtered page, for example `/cars?city[]=Pune`, after a short "Opening..." message (button: Open now). The chat is saved first and the widget reopens on the new page with the whole conversation. Normal list answers get a "View all N cars" button instead. New cars, bikes and trucks work the same way (`/new-cars?...`).
+
+**Greeting only once**
+- The spoken greeting plays once per visitor per day, not on re-open, refresh or page change. A later "hi" gets a short "I'm right here, shall we continue with ..." instead of a new greeting.
+- The conversation is kept for the browser session (refresh and page navigation do not clear it); the refresh button starts a new one.
+
+**Production fix:** the assistant's rate limits now use a separate bucket per endpoint. Before, Laravel's inline `throttle:N,1` shared one counter per IP across routes, so a few chat messages could make booking fail with "Too Many Attempts".
+
+Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan optimize:clear`.
