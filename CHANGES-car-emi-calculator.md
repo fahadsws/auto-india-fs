@@ -95,3 +95,32 @@ After deploying run: `php artisan migrate` (creates `seo_entries` and the `seo.m
 
 ## Verified
 `php artisan test` on MariaDB: 16 tests pass.
+
+---
+
+# Advanced SEO for Articles (manual, link importer, AI draft, automation) — what changed
+
+After deploying run: `php artisan migrate` (adds SEO columns to `articles`; existing articles keep working).
+
+## New files
+| Path | Purpose |
+|---|---|
+| `database/migrations/2026_10_01_000007_add_seo_fields_to_articles.php` | `meta_keywords, canonical_url, robots, og_title, og_description, og_image, schema_type, schema_json` on `articles` |
+| `app/Services/ArticleSeo.php` | AI-written meta title/description, keywords, takeaways, tags and FAQ; `fillMissing()` only fills empty fields |
+| `tests/Feature/ArticleSeoTest.php` | Feature tests |
+
+## Modified files
+| Path | Change |
+|---|---|
+| `resources/views/admin/articles/form.blade.php` | SEO & Schema and FAQ tabs (shared partial), Tags and Key takeaways inputs, "Generate SEO with AI" button; AI draft fills all new fields |
+| `app/Http/Controllers/Admin/ArticleController.php` | Saves advanced SEO/FAQ/tags/takeaways; AI draft returns keywords, FAQ, takeaways, tags; new `aiSeo` endpoint; bulk action "Generate missing SEO (AI)" |
+| `app/Services/NewsImporter.php` | Automation and link importer fill meta keywords, robots and schema type (defaults from Settings) |
+| `app/Http/Controllers/Admin/SettingController.php` | Settings "SEO & Tracking": default robots and schema type for imported articles |
+| `resources/views/site/news/show.blade.php` | Article page honours canonical, robots, Open Graph, keywords, schema type, custom JSON-LD |
+| `resources/views/site/layout.blade.php` | `keywords` meta from a page section |
+| `resources/views/admin/partials/seo-fields.blade.php`, `app/Support/SeoRules.php` | Configurable schema types and title limit; FAQ setter used by the AI buttons |
+| `app/Http/Controllers/Site/PageController.php` | Noindex articles dropped from sitemap and llms.txt |
+| `resources/views/admin/partials/dt.blade.php`, `routes/web.php` | Bulk action icon, `articles/{article}/ai-seo` route |
+
+## Verified
+`php artisan test` on MariaDB: 21 tests pass. AI calls are tested against a faked provider; the news crawler / link importer was not run against live sites in the build environment.

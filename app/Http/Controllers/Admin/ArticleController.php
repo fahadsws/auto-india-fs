@@ -112,7 +112,10 @@ class ArticleController extends Controller
             'published_at' => 'nullable|date',
             'videos' => 'nullable|array',
             'videos.*' => 'exists:videos,id',
-        ]);
+            'tags_text' => 'nullable|string|max:300',
+            'tldr_text' => 'nullable|string|max:900',
+        ] + ['meta_title' => 'nullable|string|max:70'] + \App\Support\SeoRules::rules(\App\Support\SeoRules::ARTICLE_SCHEMA_TYPES));
+        if ($err = \App\Support\SeoRules::schemaError($data)) return back()->withInput()->withErrors(['schema_json' => $err]);
 
         // Users without the publish permission can only save drafts.
         if (! $r->user()->can('articles.publish')) $data['status'] = 'draft';
@@ -127,6 +130,10 @@ class ArticleController extends Controller
             $data['image_path'] = $this->storePublicUpload($r->file('image'), 'articles');
         }
         unset($data['image'], $data['videos']);
+        $data = array_merge(array_diff_key($data, array_flip(['faq', 'tags_text', 'tldr_text'])), \App\Support\SeoRules::attributes($data), [
+            'tags' => array_slice(array_values(array_filter(array_map(fn ($t) => Str::lower(trim($t)), explode(',', (string) ($data['tags_text'] ?? ''))))), 0, 10) ?: null,
+            'tldr' => array_slice(array_values(array_filter(array_map('trim', preg_split('/\R/', (string) ($data['tldr_text'] ?? ''))))), 0, 3) ?: null,
+        ]);
 
         $article->fill($data)->save();
         $article->videos()->sync($r->input('videos', []));
@@ -169,12 +176,23 @@ class ArticleController extends Controller
         if (! AiClient::configured()) return response()->json(['error' => 'AI provider is not configured (Settings → AI).'], 422);
 
         $data = AiClient::json([
-            ['role' => 'system', 'content' => 'You are a senior automotive journalist for an Indian car news site. Write an original, accurate, engaging article on the given topic. Do not invent specific prices, dates or specs you are not sure about. Reply with ONE JSON object only: {"title": "...", "excerpt": "max 200 chars", "body_html": "350-600 words using only <p>, <h2>, <ul>, <li>, <strong>", "meta_title": "max 60 chars", "meta_description": "max 155 chars"}'],
+            ['role' => 'system', 'content' => 'You are a senior automotive journalist for an Indian car news site. Write an original, accurate, engaging article on the given topic. Do not invent specific prices, dates or specs you are not sure about. Reply with ONE JSON object only: {"title": "...", "excerpt": "max 200 chars", "body_html": "350-600 words using only <p>, <h2>, <ul>, <li>, <strong>", "meta_title": "max 60 chars", "meta_description": "max 155 chars", "meta_keywords": "6-10 comma separated keywords", "tldr": ["3 short takeaways"], "tags": ["4-6 lowercase tags"], "faq": [{"q": "", "a": ""}]} with exactly 3 faq items'],
             ['role' => 'user', 'content' => $r->topic],
-        ], ['temperature' => 0.8, 'max_tokens' => 2200]);
+        ], ['temperature' => 0.8, 'max_tokens' => 3000]);
 
         return $data ? response()->json($data) : response()->json(['error' => 'The AI provider did not return a usable draft. Try again.'], 502);
     }
+    /** AI-written meta/keywords/FAQ/takeaways for an existing article; returns suggestions for the form to fill (nothing is saved). */
+    public function aiSeo(Request $r, Article $article)
+    {
+        abort_unless($this->canEdit($article), 403);
+        if (! AiClient::configured()) return response()->json(['error' => 'AI provider is not configured (Settings → AI).'], 422);
+        $in = $r->validate(['title' => 'nullable|string|max:250', 'excerpt' => 'nullable|string|max:600', 'body' => 'nullable|string']);
+        $s = \App\Services\ArticleSeo::suggest(['title' => $in['title'] ?? $article->title, 'excerpt' => $in['excerpt'] ?? $article->excerpt, 'body' => $in['body'] ?? $article->body]);
+
+        return $s ? response()->json($s) : response()->json(['error' => 'The AI provider did not return usable suggestions. Try again.'], 502);
+    }
+
     protected function bulkSearchable(): array { return ['title', 'excerpt', 'slug']; }
 
     protected function bulkFiltered(Request $r): ?\Illuminate\Database\Eloquent\Builder { return $this->filtered($r); }
@@ -194,6 +212,7 @@ class ArticleController extends Controller
         }
         $a['category'] = ['label' => 'Change category', 'options' => array_merge([['', '— No category —']], Category::orderBy('name')->get()->map(fn ($c) => [(string) $c->id, $c->name])->all()),
             'do' => fn (Article $m, Request $r) => $m->update(['category_id' => $r->value ?: null]) || true];
+        $a['ai_seo'] = ['label' => 'Generate missing SEO (AI)', 'confirm' => 'Fills only EMPTY meta title/description, keywords, takeaways, tags and FAQ. Existing text is never changed.', 'do' => fn (Article $m) => \App\Services\ArticleSeo::fillMissing($m)];
         if ($u->can('articles.delete')) {
             $a['delete'] = ['label' => 'Delete permanently', 'danger' => true, 'confirm' => 'This cannot be undone.', 'do' => function (Article $m) {
                 if ($m->image_path && ! Str::startsWith($m->image_path, 'http')) Storage::disk('public')->delete($m->image_path);

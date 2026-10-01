@@ -12,7 +12,10 @@ class SeoRules
     public const SCHEMA_TYPES = ['None' => 'None', 'WebPage' => 'WebPage', 'Article' => 'Article', 'Service' => 'Service', 'FAQPage' => 'FAQPage',
         'WebApplication' => 'WebApplication', 'CollectionPage' => 'CollectionPage', 'AboutPage' => 'AboutPage', 'ContactPage' => 'ContactPage'];
 
-    public static function rules(): array
+    public const ARTICLE_SCHEMA_TYPES = ['NewsArticle' => 'NewsArticle', 'Article' => 'Article', 'BlogPosting' => 'BlogPosting', 'Review' => 'Review', 'None' => 'None'];
+
+    /** @param array<string,string>|null $schemaTypes allowed schema types (defaults to the page list) */
+    public static function rules(?array $schemaTypes = null): array
     {
         return [
             'meta_title' => 'nullable|string|max:120',
@@ -23,7 +26,7 @@ class SeoRules
             'og_title' => 'nullable|string|max:160',
             'og_description' => 'nullable|string|max:320',
             'og_image' => 'nullable|string|max:500',
-            'schema_type' => ['required', Rule::in(array_keys(self::SCHEMA_TYPES))],
+            'schema_type' => ['required', Rule::in(array_keys($schemaTypes ?? self::SCHEMA_TYPES))],
             'schema_json' => 'nullable|string|max:20000',
             'faq' => 'nullable|array|max:50',
             'faq.*.q' => 'nullable|string|max:300',

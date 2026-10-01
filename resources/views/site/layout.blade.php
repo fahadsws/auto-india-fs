@@ -22,7 +22,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ $pageTitle }}</title>
   <meta name="description" content="{{ \Illuminate\Support\Str::limit($pageDesc, 160, '') }}">
-  @if ($seo?->meta_keywords)<meta name="keywords" content="{{ $seo->meta_keywords }}">@endif
+  @if ($kw = $seo?->meta_keywords ?: trim($__env->yieldContent('keywords')))<meta name="keywords" content="{{ $kw }}">@endif
   <link rel="canonical" href="{{ $canonical }}">
   @if ($robotsTag)<meta name="robots" content="{{ $robotsTag }}">@endif
   @if ($v = \App\Models\Setting::get('seo.google_verification'))<meta name="google-site-verification" content="{{ $v }}">@endif

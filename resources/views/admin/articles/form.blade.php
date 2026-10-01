@@ -30,14 +30,25 @@
       <div class="card mb-4"><div class="card-body">
         <div class="mb-3"><label class="form-label">Title</label><input class="form-control" name="title" id="f_title" value="{{ old('title', $article->title) }}" required></div>
         <div class="mb-3"><label class="form-label">Summary / excerpt</label><textarea class="form-control" name="excerpt" id="f_excerpt" rows="2" maxlength="600">{{ old('excerpt', $article->excerpt) }}</textarea></div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><label class="form-label">Tags <small class="text-muted">(comma separated)</small></label><input class="form-control" name="tags_text" id="f_tags" maxlength="300" value="{{ old('tags_text', implode(', ', $article->tags ?? [])) }}"></div>
+          <div class="col-md-6"><label class="form-label">Key takeaways <small class="text-muted">(one per line, up to 3)</small></label><textarea class="form-control" name="tldr_text" id="f_tldr" rows="3" maxlength="900">{{ old('tldr_text', implode("\n", $article->tldr ?? [])) }}</textarea></div>
+        </div>
         <label class="form-label">Body</label>
         <textarea name="body" id="f_body" class="editor">{{ old('body', $article->body) }}</textarea>
       </div></div>
 
-      <div class="card"><div class="card-header"><h5 class="card-title mb-0">SEO</h5></div><div class="card-body">
-        <div class="mb-3"><label class="form-label">Meta title</label><input class="form-control" name="meta_title" id="f_meta_title" maxlength="70" value="{{ old('meta_title', $article->meta_title) }}"></div>
-        <div class="mb-3"><label class="form-label">Meta description</label><textarea class="form-control" name="meta_description" id="f_meta_description" rows="2" maxlength="320">{{ old('meta_description', $article->meta_description) }}</textarea></div>
-      </div></div>
+      @php($tab = $errors->has('faq.*') ? 'faq' : 'seo')
+      <div class="card">
+        <ul class="nav nav-tabs" role="tablist">
+          <li class="nav-item"><button class="nav-link {{ $tab === 'seo' ? 'active' : '' }}" type="button" data-bs-toggle="tab" data-bs-target="#t-seo"><i class="ti ti-world me-2"></i>SEO &amp; Schema</button></li>
+          <li class="nav-item"><button class="nav-link {{ $tab === 'faq' ? 'active' : '' }}" type="button" data-bs-toggle="tab" data-bs-target="#t-faq"><i class="ti ti-help-circle me-2"></i>FAQ</button></li>
+          @if ($article->exists)<li class="nav-item ms-auto"><button type="button" class="btn btn-sm btn-label-primary my-2 me-3" id="aiSeoBtn"><i class="ti ti-sparkles me-1"></i>Generate SEO with AI</button></li>@endif
+        </ul>
+        <div class="card-body tab-content pt-4">
+          @include('admin.partials.seo-fields', ['m' => $article, 'tab' => $tab, 'seoUrl' => $article->exists ? $article->url : url('/news').'/…', 'titleInput' => 'f_title', 'schemaTypes' => \App\Support\SeoRules::ARTICLE_SCHEMA_TYPES, 'titleMax' => 70])
+        </div>
+      </div>
     </div>
 
     <div class="col-lg-4">
@@ -83,10 +94,27 @@
     try {
       const r = await fetch(@json(route('admin.articles.ai')), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': ADMIN.csrf }, body: JSON.stringify({ topic }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
-      f_title.value = d.title || ''; f_excerpt.value = d.excerpt || ''; f_meta_title.value = d.meta_title || d.title || ''; f_meta_description.value = d.meta_description || '';
+      f_title.value = d.title || ''; f_excerpt.value = d.excerpt || ''; f_mt.value = d.meta_title || d.title || ''; f_md.value = d.meta_description || '';
+      document.querySelector('[name=meta_keywords]').value = d.meta_keywords || (d.tags || []).join(', ');
+      f_tags.value = (d.tags || []).join(', '); f_tldr.value = (d.tldr || []).join('\n'); window.seoSetFaq(d.faq || []); window.seoPreview();
       tinymce.get('f_body').setContent(d.body_html || '');
     } catch (e) { alert(e.message); }
     aiBtn.disabled = false; aiBtn.textContent = 'Generate';
+  });
+
+  const aiSeoBtn = document.getElementById('aiSeoBtn');
+  aiSeoBtn?.addEventListener('click', async () => {
+    aiSeoBtn.disabled = true; const old = aiSeoBtn.innerHTML; aiSeoBtn.textContent = 'Working…';
+    try {
+      tinymce.triggerSave();
+      const r = await fetch(@json($article->exists ? route('admin.articles.ai-seo', $article) : '#'), { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': ADMIN.csrf }, body: JSON.stringify({ title: f_title.value, excerpt: f_excerpt.value, body: tinymce.get('f_body').getContent() }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed');
+      if (d.meta_title) f_mt.value = d.meta_title; if (d.meta_description) f_md.value = d.meta_description;
+      if (d.meta_keywords) document.querySelector('[name=meta_keywords]').value = d.meta_keywords;
+      if (d.tags?.length) f_tags.value = d.tags.join(', '); if (d.tldr?.length) f_tldr.value = d.tldr.join('\n'); if (d.faq?.length) window.seoSetFaq(d.faq);
+      window.seoPreview(); alert('SEO suggestions filled in. Review them, then press Save.');
+    } catch (e) { alert(e.message); }
+    aiSeoBtn.disabled = false; aiSeoBtn.innerHTML = old;
   });
 </script>
 @endpush
