@@ -48,6 +48,11 @@ class AppServiceProvider extends ServiceProvider
                 ? ['header' => \App\Models\MenuItem::tree('header'), 'footer' => \App\Models\MenuItem::tree('footer')]
                 : ['header' => collect(), 'footer' => collect()];
             $view->with('headerMenu', $menus['header'])->with('footerMenu', $menus['footer']);
+
+            // Admin-edited SEO for the current built-in page (null when none, or before the migration has run).
+            static $hasSeo = null;
+            $hasSeo ??= Schema::hasTable('seo_entries');
+            $view->with('seo', $hasSeo ? \App\Models\SeoEntry::forRoute(request()->route()?->getName()) : null);
         });
     }
 }

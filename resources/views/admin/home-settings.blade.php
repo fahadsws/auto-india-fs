@@ -22,7 +22,10 @@
             <h4 class="mb-1">Home settings</h4>
             <p class="text-muted mb-0">Manage the content blocks shown on your homepage and the ads around the site.</p>
         </div>
-        <a href="{{ route('home') }}" target="_blank" class="btn btn-label-secondary"><i class="ti ti-external-link me-1"></i>View homepage</a>
+        <div class="d-flex gap-2">
+            @can('seo.manage')<a href="{{ route('admin.seo.edit', 'home') }}" class="btn btn-label-primary"><i class="ti ti-seo me-1"></i>Home page SEO</a>@endcan
+            <a href="{{ route('home') }}" target="_blank" class="btn btn-label-secondary"><i class="ti ti-external-link me-1"></i>View homepage</a>
+        </div>
     </div>
 
     <form id="home-settings-form" method="POST" enctype="multipart/form-data" action="{{ route('admin.home-settings.update') }}">

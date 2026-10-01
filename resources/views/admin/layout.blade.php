@@ -50,7 +50,7 @@
       <ul class="menu-inner py-1">
         <li class="menu-item {{ $on('admin.dashboard') }}"><a href="{{ route('admin.dashboard') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-smart-home"></i><div>Dashboard</div></a></li>
 
-        @canany(['articles.view', 'categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'pages.manage'])
+        @canany(['articles.view', 'categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'pages.manage', 'seo.manage'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">Content</span></li>
         @endcanany
         @can('articles.view')
@@ -58,6 +58,9 @@
         @endcan
         @can('pages.manage')
         <li class="menu-item {{ $on('admin.pages.*') }}"><a href="{{ route('admin.pages.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-file-text"></i><div>Pages</div></a></li>
+        @endcan
+        @can('seo.manage')
+        <li class="menu-item {{ $on('admin.seo.*') }}"><a href="{{ route('admin.seo.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-seo"></i><div>SEO</div></a></li>
         @endcan
         @can('cars.manage')
         <li class="menu-item {{ $on('admin.car-models.*') }}"><a href="{{ route('admin.car-models.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-car-suv"></i><div>Vehicle catalog</div></a></li>

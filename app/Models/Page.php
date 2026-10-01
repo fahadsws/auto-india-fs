@@ -11,8 +11,8 @@ class Page extends Model
     use SoftDeletes;
 
     public const TEMPLATES = ['default' => 'Content + sidebar', 'full' => 'Full width', 'no-sidebar' => 'Content only (no sidebar)'];
-    public const SCHEMA_TYPES = ['WebPage' => 'WebPage', 'Article' => 'Article', 'Service' => 'Service', 'FAQPage' => 'FAQPage', 'None' => 'None'];
-    public const ROBOTS = ['index,follow' => 'Index, follow', 'noindex,follow' => 'No index, follow', 'noindex,nofollow' => 'No index, no follow'];
+    public const SCHEMA_TYPES = \App\Support\SeoRules::SCHEMA_TYPES;
+    public const ROBOTS = \App\Support\SeoRules::ROBOTS;
 
     /** Paths that already belong to the site and must never be taken by a page slug. */
     public const RESERVED = ['admin', 'cron', 'assistant', 'news', 'new-cars', 'new-bikes', 'new-trucks', 'cars', 'compare', 'videos', 'search', 'lead',
