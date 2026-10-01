@@ -1,25 +1,6 @@
 {{-- Lead form + filter panel. Expects: $filters, $clear (reset url). Inputs of the form may live elsewhere via form="flt". --}}
 <aside class="fx-side">
-    <section class="fx-lead" id="lead">
-        <h3>Get best offers</h3>
-        @if(session('lead_success'))
-            <p class="fx-ok"><i class="ti ti-circle-check"></i> {{ session('lead_success') }}</p>
-        @else
-            <form method="POST" action="{{ route('lead.submit') }}">
-                @csrf
-                <input type="text" name="website" class="fx-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
-                <input name="name" value="{{ old('name') }}" placeholder="Your name" required maxlength="120" autocomplete="name">
-                <input name="phone" type="tel" inputmode="tel" value="{{ old('phone') }}" placeholder="Mobile number" required
-                    pattern="[+0-9 \-]{8,15}" autocomplete="tel">
-                <select name="city" required>
-                    <option value="">Select city</option>
-                    @foreach(\App\Support\Filters::CITIES as $c)<option @selected(old('city') === $c)>{{ $c }}</option>@endforeach
-                </select>
-                @if($errors->any())<p class="fx-err">{{ $errors->first() }}</p>@endif
-                <button type="submit">Get best offers</button>
-            </form>
-        @endif
-    </section>
+    @include('site.partials.lead-form')
 
     <form class="fx-filters" id="flt" method="GET" action="{{ $clear }}">
         <div class="fx-head"><h3>Filters</h3>@if(request()->hasAny(array_merge(['q'], collect($filters)->pluck('key')->all())))<a href="{{ $clear }}">Clear all</a>@endif</div>

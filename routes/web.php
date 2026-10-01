@@ -34,6 +34,7 @@ Route::post('/lead', [Site\PageController::class, 'quickLead'])->middleware('thr
 Route::get('/about', [Site\PageController::class, 'about'])->name('about');
 Route::get('/contact', [Site\PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [Site\PageController::class, 'contactSubmit'])->middleware('throttle:6,1')->name('contact.submit');
+Route::get('/car-emi-calculator', [Site\CalculatorController::class, 'emi'])->name('emi');
 Route::get('/sell-your-car', [Site\PageController::class, 'sell'])->name('sell');
 Route::post('/sell-your-car', [Site\PageController::class, 'sellSubmit'])->middleware('throttle:6,1')->name('sell.submit');
 Route::get('/sitemap.xml', [Site\PageController::class, 'sitemap'])->name('sitemap');
