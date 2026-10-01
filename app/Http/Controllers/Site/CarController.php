@@ -21,6 +21,15 @@ class CarController extends Controller
         if ($r->filled('brand')) $q->whereHas('brandMaster', fn ($b) => $b->whereIn('name', (array) $r->brand));
         if ($r->filled('fuel')) $q->whereHas('fuelMaster', fn ($b) => $b->whereIn('name', (array) $r->fuel));
         \App\Support\Filters::applyBudget($q, 'price', $r->budget);
+        // Exact filters (used by the AI assistant's "view all" links so the page shows the same cars it counted).
+        if ($r->filled('price_min')) $q->where('price', '>=', (int) $r->price_min);
+        if ($r->filled('price_max')) $q->where('price', '>', 0)->where('price', '<=', (int) $r->price_max);
+        if ($r->filled('year')) $q->where('year', (int) $r->year);
+        if ($r->filled('year_min')) $q->where('year', '>=', (int) $r->year_min);
+        if ($r->filled('year_max')) $q->where('year', '<=', (int) $r->year_max);
+        if ($r->filled('km_max')) $q->where('km_driven', '<=', (int) $r->km_max);
+        if ($r->filled('owner')) $q->where(fn ($x) => $x->where('owner', 'like', '%1%')->orWhere('owner', 'like', '%first%'));
+        if ($r->filled('body_type')) $q->whereHas('vehicleModel', fn ($x) => $x->whereIn('body_type_id', (array) $r->body_type));
 
         match ($r->sort) {
             'price_asc' => $q->orderBy('price'),

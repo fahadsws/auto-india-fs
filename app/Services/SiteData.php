@@ -106,7 +106,7 @@ class SiteData
         $wantUsed = $type !== 'new' && $vehicle === 'car';
         $wantNew = $type !== 'used';
 
-        $parts = []; $links = []; $sources = []; $items = []; $found = 0; $totals = ['used' => 0, 'new' => 0];
+        $parts = []; $links = []; $sources = []; $items = []; $lines = []; $found = 0; $totals = ['used' => 0, 'new' => 0];
         $desc = self::describe($f);
 
         if ($wantUsed) {
@@ -117,7 +117,7 @@ class SiteData
             $parts[] = $total
                 ? "USED CARS IN OUR STOCK matching ($desc): $total".($total > 5 ? ' (showing the first 5)' : '').":\n".$rows->map(fn ($l) => '- '.self::usedLine($l))->implode("\n")
                 : "USED CARS: none in our stock match ($desc). Total used cars in stock right now: $all.";
-            foreach ($rows as $l) { $items[] = AssistantMemory::item($l); }
+            foreach ($rows->take(3) as $l) { $items[] = AssistantMemory::item($l); $lines[] = self::usedLine($l); }
             foreach ($rows->take(3) as $l) { $links[] = ['title' => $l->title, 'url' => $l->url, 'image' => $l->image_url, 'type' => 'listing', 'k' => 'l', 'id' => $l->id, 'price' => $l->price_label]; $sources[] = ['type' => 'listing', 'title' => $l->title, 'url' => $l->url]; }
         }
         if ($wantNew) {
@@ -128,11 +128,52 @@ class SiteData
             $parts[] = $total
                 ? "NEW {$label} MODELS IN OUR CATALOG matching ($desc): $total".($total > 5 ? ' (showing the first 5)' : '').":\n".$rows->map(fn ($m) => '- '.self::newLine($m))->implode("\n")
                 : "NEW {$label} MODELS: none in our catalog match ($desc).";
-            foreach ($rows as $m) { $items[] = AssistantMemory::item($m); }
+            foreach ($rows->take(3) as $m) { $items[] = AssistantMemory::item($m); $lines[] = self::newLine($m); }
             foreach ($rows->take(3) as $m) { $links[] = ['title' => $m->full_name, 'url' => $m->url, 'image' => $m->hero_url, 'type' => 'car', 'k' => 'c', 'id' => $m->id, 'price' => $m->price_label]; $sources[] = ['type' => 'car', 'title' => $m->full_name, 'url' => $m->url]; }
         }
 
-        return ['context' => implode("\n\n", $parts), 'links' => array_slice($links, 0, 3), 'sources' => $sources, 'found' => $found, 'items' => array_slice($items, 0, 5), 'totals' => $totals];
+        return ['context' => implode("\n\n", $parts), 'links' => $links, 'sources' => $sources, 'found' => $found, 'items' => $items, 'lines' => $lines, 'totals' => $totals, 'desc' => $desc];
+    }
+
+    private const CONTENT_STOP = ['news', 'latest', 'new', 'newest', 'recent', 'today', 'khabar', 'khabrein', 'samachar', 'article', 'articles', 'video', 'videos', 'review', 'reviews', 'show', 'tell', 'about', 'dikhao', 'batao', 'bataiye', 'dikha', 'cars', 'car', 'gaadi', 'gadi', 'mujhe', 'muje', 'kuch', 'koi', 'abhi', 'headlines', 'from', 'your', 'site', 'website', 'give', 'want', 'need', 'please', 'any', 'the', 'and', 'for', 'with', 'what', 'whats', 'have', 'you'];
+
+    public static function newsIntent(string $t): bool
+    {
+        return (bool) preg_match('/\b(news|khabar|khabrein|samachar|articles?|headlines?|reviews?)\b/i', $t);
+    }
+
+    public static function videoIntent(string $t): bool
+    {
+        return (bool) preg_match('/\b(videos?|youtube|watch)\b/i', $t);
+    }
+
+    /**
+     * Real news articles / videos from the database: the ones that match the visitor's words, otherwise the latest.
+     * @return array{context:string, links:array, sources:array, found:int, lines:array, kind:string}
+     */
+    public static function contentLookup(string $kind, string $query): array
+    {
+        $words = collect(preg_split('/[^\p{L}\p{N}]+/u', Str::lower($query), -1, PREG_SPLIT_NO_EMPTY))->filter(fn ($w) => mb_strlen($w) >= 3 && ! in_array($w, self::CONTENT_STOP, true))->unique()->take(4)->values();
+        $isNews = $kind === 'news';
+        $base = fn () => $isNews ? \App\Models\Article::published() : \App\Models\Video::active();
+        $dateCol = 'published_at';
+        $rows = collect();
+        if ($words->isNotEmpty()) {
+            $rows = $base()->where(fn ($q) => $words->each(fn ($w) => $q->orWhere('title', 'like', "%$w%")))->latest($dateCol)->limit(3)->get();
+        }
+        $matched = $rows->isNotEmpty();
+        if (! $matched) $rows = $base()->latest($dateCol)->limit(3)->get();
+
+        $label = $isNews ? 'NEWS ARTICLES' : 'VIDEOS';
+        $lines = $rows->map(fn ($r) => $r->title.($r->$dateCol ? ' ('.$r->$dateCol->format('d M Y').')' : ''))->all();
+        $context = $rows->isEmpty()
+            ? "$label: none published yet."
+            : "$label ".($matched ? 'matching the question' : 'latest').":\n".$rows->map(fn ($r) => '- '.$r->title.($r->$dateCol ? ' ('.$r->$dateCol->format('d M Y').')' : '').($isNews && $r->excerpt ? ': '.Str::limit(strip_tags($r->excerpt), 160, '…') : ''))->implode("\n");
+        return [
+            'context' => $context, 'kind' => $kind, 'found' => $rows->count(), 'lines' => $lines, 'matched' => $matched,
+            'links' => $rows->map(fn ($r) => ['title' => $r->title, 'url' => $r->url, 'image' => $isNews ? $r->image_url : $r->thumbnail, 'type' => $isNews ? 'article' : 'video'])->all(),
+            'sources' => $rows->map(fn ($r) => ['type' => $isNews ? 'article' : 'video', 'title' => $r->title, 'url' => $r->url])->all(),
+        ];
     }
 
     private static function usedQuery(array $f)
@@ -234,16 +275,16 @@ class SiteData
         return Cache::remember('asst:bodies', 600, fn () => VehicleBodyType::where('is_active', true)->pluck('name', 'id')->all());
     }
 
-    /** The real, filtered listing page for these filters (used cars, or new cars/bikes/trucks). */
+    /**
+     * The real, filtered listing page for these filters. It must show the SAME cars the assistant counted, so exact price,
+     * year, km, owner and body type travel in the URL too (the pages apply them).
+     */
     public static function browseUrl(array $f): string
     {
         $vehicle = $f['vehicle'] ?? 'car';
-        $bands = function (string $v) use ($f) {
-            $lo = $f['price_min'] ?? 0; $hi = $f['price_max'] ?? null;
-            return collect(Filters::budgets($v))->filter(fn ($b, $k) => ! (isset($f['price_min']) || isset($f['price_max'])) ? false : (($b[2] === null || $b[2] > $lo) && ($hi === null || $b[1] < $hi)))->keys()->all();
-        };
+        $price = array_filter(['price_min' => $f['price_min'] ?? null, 'price_max' => $f['price_max'] ?? null]);
 
-        if (($f['type'] ?? null) !== 'new' && $vehicle === 'car') {                      // used cars: /cars?brand[]=&fuel[]=&city[]=&transmission[]=&budget[]=&sort=
+        if (($f['type'] ?? null) !== 'new' && $vehicle === 'car') {                      // used cars: /cars?brand[]=&fuel[]=&city[]=&transmission[]=&price_max=...
             $q = [];
             if (! empty($f['brand'])) $q['brand'] = [$f['brand']];
             if (! empty($f['fuel'])) $q['fuel'] = \App\Models\VehicleFuel::where(fn ($w) => collect($f['fuel'])->each(fn ($n) => $w->orWhere('name', 'like', "%$n%")))->pluck('name')->all();
@@ -252,18 +293,20 @@ class SiteData
                 $vals = Listing::active()->whereNotNull('transmission')->distinct()->pluck('transmission');
                 $q['transmission'] = $vals->filter(fn ($v) => $f['transmission'] === 'auto' ? preg_match('/auto|amt|cvt|dct/i', $v) : preg_match('/manual/i', $v))->values()->all();
             }
-            if ($b = $bands('car')) $q['budget'] = $b;
+            if (! empty($f['body_id'])) $q['body_type'] = [$f['body_id']];
+            foreach (['year', 'year_min', 'year_max', 'km_max', 'owner'] as $k) if (isset($f[$k])) $q[$k] = $f[$k];
+            $q += $price;
             if (($f['sort'] ?? null) === 'desc') $q['sort'] = 'price_desc';
             elseif (($f['sort'] ?? null) === 'asc' || isset($f['price_max'])) $q['sort'] = 'price_asc';
-            return route('cars.index', array_filter($q, fn ($v) => $v !== []));
+            return route('cars.index', array_filter($q, fn ($v) => $v !== [] && $v !== null));
         }
 
         $route = ['car' => 'newcars.index', 'bike' => 'newbikes.index', 'truck' => 'newtrucks.index'][$vehicle] ?? 'newcars.index';
-        $q = [];                                                                          // new vehicles: /new-cars?brand[]=id&body_type[]=id&fuel[]=id&budget[]=
+        $q = [];                                                                          // new vehicles: /new-cars?brand[]=id&body_type[]=id&fuel[]=id&price_max=
         if (! empty($f['brand_id'])) $q['brand'] = [$f['brand_id']];
         if (! empty($f['body_id'])) $q['body_type'] = [$f['body_id']];
         if (! empty($f['fuel'])) $q['fuel'] = \App\Models\VehicleFuel::where(fn ($w) => collect($f['fuel'])->each(fn ($n) => $w->orWhere('name', 'like', "%$n%")))->pluck('id')->all();
-        if ($b = $bands($vehicle)) $q['budget'] = $b;
+        $q += $price;
         if (($f['status'] ?? null)) $q['status'] = $f['status'];
         return route($route, array_filter($q, fn ($v) => $v !== []));
     }

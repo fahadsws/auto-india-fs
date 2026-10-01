@@ -131,34 +131,27 @@ Deploy: `php artisan migrate` (adds `chat_logs.sources`), `php artisan optimize:
 
 Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan optimize:clear`.
 
-## Conversational sales assistant: Hindi by default, no manual buttons, AI-captured enquiries
-**What changed for visitors**
-- Removed every manual enquiry control: the Select / Test drive / Inspection buttons on car cards, the booking card (date/slot/place form), the tap-to-answer city/budget chips, and the "Book test drive" / "Book showroom visit" starters. Cars are now plain link cards.
-- The AI does the talking. When a visitor shows interest it offers a test drive, inspection or callback, asks only what is missing (one question at a time: car, date, time slot, showroom or home + address; or topic, city, budget, best time to call), repeats it back, and saves it once they say yes. Name, mobile and email are already verified, so it never asks for them again.
-- **Hindi is the default** (Devanagari, in the chat, greeting, spoken replies, speech recognition `hi-IN` and the widget text). A clearly English message switches that visitor to English; Hindi/Hinglish switches back.
-- Hindi messages run the same database lookups: Devanagari fuel, budget (`8 लाख से कम`), cities, brands, "show all" and "pehli wali" are understood (`app/Services/HindiText.php`).
+## Production fix: show first, ask one thing, save reliably, clean new chats
+**What was wrong (seen in the chat logs)**
+- "muje car batao" got only a link: the AI had a list of site links in its prompt and answered with one, and it asked several questions at once.
+- The booking details were left to the AI to collect and to emit as hidden text, which weak models get wrong.
+- The "view all" page ignored some filters the chat used, so the counts did not match.
+- Refreshing or starting a new chat could still carry old context (the memory lived on the visitor's session).
+- The Hindi-only default and Hindi widget text were not wanted. **Removed**: the widget and AI are back to mirroring the visitor (English, Hindi or Hinglish). Devanagari typing is still understood (`HindiText`), so "पुणे में डीज़ल गाड़ी" runs the same lookup.
 
-**How a lead is saved (production-safe)**
-- The AI ends its reply with one hidden line `[[LEAD {...}]]` after the visitor confirms. `app/Services/AssistantCapture.php` strips it from the visible reply, validates it against real data (the car must exist in the list shown, date within the next 30 days, valid slot/place, address for home visits) and only then writes the lead.
-- Leads appear in Admin -> Leads as **test drive**, **inspection** or **enquiry** (source "chatbot"), with the car linked, name/phone/email from the verified visitor, and the sales team is emailed. The same visitor asking again about the same car within a day updates the lead.
-- The visitor sees the real reference (TD-/IN-/EQ-id) appended by the server. If the AI claims a booking but details are missing or invalid, nothing is saved and the reply is replaced by "please tell me: date, time..." - it never says "booked" falsely.
-- The running chat lead (type "chatbot") is still enriched with what they want and the car they picked.
-- Removed endpoints: `POST /assistant/select`, `POST /assistant/book`.
+**New behaviour**
+- **Show first.** Any request for cars ("car batao", "show me cars", "used car chahiye") immediately queries the database and shows real cards (name, price, image) plus a short answer. News and video requests show the latest real articles/videos (`SiteData::contentLookup`). The AI is told to use only that data, never paste links, and never ask questions itself.
+- **At most one follow-up question per reply**, after the results: new or used -> city (used) -> budget -> an offer of a test drive. Each is asked once. Any extra question the model writes is removed.
+- **Works without the AI too.** If the AI is off or over budget, the same data is listed from the database.
+- **Test drive / inspection / enquiry flow (`AssistantFlow`)**, one question at a time, zero tokens: car (pick by number or name) -> date -> time -> showroom or home (+ address) -> a recap -> "yes". It understands "kal subah", "Saturday 3 pm", "5 Oct", "ghar par", and several answers in one message. Enquiries: callback, sell my car, loan, exchange. A question in the middle is answered by the AI and the pending question is asked again; "cancel" or "never mind" drops it. Nothing is saved until the visitor says yes.
+- **Database entry (`AssistantCapture`)**: validated against real data (car still exists, date in the next 30 days, valid slot, address for home visits), then saved to Admin -> Leads as test drive / inspection / enquiry with the car linked and the verified name/phone/email, and the sales team is emailed. The same visitor and car within a day updates the lead. The visitor sees the real reference (TD- / IN- / EQ-).
+- **View all opens a page with the same cars.** The link carries exact price, year, km, owner, body type and fuel/city filters, and `/cars` and `/new-cars` now apply them.
+- **Clean new chats.** Each chat has an id; a page refresh or the new-chat button starts a new id and the server ignores everything stored under the old one. A chat silent for 30 minutes also starts over. Moving between pages keeps the same chat.
+- Removed all manual buttons (card Select/Test drive/Inspection, booking form, chips, "Book test drive" shortcuts) and the `select` / `book` endpoints.
+- Dynamic pages are searched on every question and used when they match; links in replies are clickable. Voice fixes from before are kept (new chat re-greets and resumes listening; stopped audio can no longer hang the loop; audio stops when leaving the page).
 
-**Voice fixes**
-- New chat (refresh button) no longer leaves the voice silent: it greets again by voice and, if the visitor was talking, goes back to listening.
-- A stopped / replaced / reset voice can no longer leave the conversation hanging (the old code awaited a clip that never "ended" after a stop). A clip that arrives after a stop or reset is discarded, not played; leaving the page stops audio and the microphone.
-- After a page refresh the browser forbids audio/mic until one tap, so the mic pulses with "tap the mic to continue" instead of staying silently dead.
-- Spoken text no longer includes emojis; the TTS limit is 900 characters (Hindi replies plus the confirmation line).
+**Defaults** (editable in Settings -> Assistant limits): 8 messages/min, 40/day, 40,000 tokens/day, 200,000 lifetime, 80,000 per IP, 6,000 spoken characters/day, reply 400 tokens (voice 260).
 
-**Knowledge: dynamic pages**
-- Published dynamic pages (Admin -> Pages, including FAQ) are searched on every question and used when they match by title or by two or more words, even without words like "price". The assistant also gets a compact list of key pages and your dynamic pages with links, so it can send visitors to the right one. Links in replies are clickable.
-- Rebuild the knowledge base once after deploying (Settings -> Rebuild knowledge base now).
+**Deploy**: no migration. `php artisan optimize:clear`, then Settings -> Rebuild knowledge base now.
 
-**Defaults raised (Hindi uses more tokens; sales chats are longer)** - all editable in Settings -> Assistant limits: messages/min 8, messages/day 40, tokens/day 40,000, lifetime 200,000, per IP 80,000, spoken characters/day 6,000, max reply 480 tokens (voice 340). Values you already saved are kept.
-
-**Setup notes**
-- ElevenLabs: use `eleven_flash_v2_5` or `eleven_multilingual_v2` (both speak Hindi) and a voice that sounds good in Hindi.
-- Update "Greeting line" and "Spoken greeting" in Settings if you saved English text earlier; the defaults are now Hindi.
-- No migration needed. Run `php artisan optimize:clear`.
-- Tests in `tests/Feature/AssistantTest.php` were rewritten for the new flow (they need MySQL like before).
+**Tests**: `tests/Feature/AssistantTest.php` was rewritten for this flow (needs MySQL, as before). The flow engine (dates, slots, places, steps, cancel, digress, number pick, enquiry) was also exercised stand-alone.

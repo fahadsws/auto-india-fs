@@ -24,16 +24,15 @@
   const views = { load: $('#vLoad'), lead: $('#vLead'), otp: $('#vOtp'), chat: $('#vChat'), fb: $('#vFb') };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false;
-  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'hi';
+  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'en', cid = '';
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }, del: k => { try { localStorage.removeItem(k) } catch (e) {} } };
   token = store.get('aw_token') || '';
   const savedSpeak = store.get('ag_speak'); speakOn = savedSpeak === null ? ag.dataset.voice === '1' : savedSpeak === '1';
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
-  // Hindi is the default language of the whole widget; the server tells us when a visitor is chatting in English.
-  const T = { hi: { left: n => n > 0 ? 'आज ' + n + ' संदेश बचे हैं' : 'आज की सीमा पूरी हो गई', resend: s => s > 0 ? s + ' सेकंड में दोबारा भेजें' : 'कोड दोबारा भेजें', conn: 'कनेक्शन में दिक्कत है। कृपया दोबारा कोशिश कीजिए।', wrong: 'कुछ गड़बड़ हो गई। कृपया दोबारा कोशिश कीजिए।', wait: 'कृपया ', sec: ' सेकंड रुकिए…', think: 'सोच रहा हूँ…', speaking: 'बोल रहा हूँ…', listening: 'सुन रहा हूँ… बोलिए', nocatch: 'सुनाई नहीं दिया — बोलते रहिए, या माइक दबाकर रोकिए', mic: 'कृपया ' + name + ' से बात करने के लिए माइक की अनुमति दीजिए।', nosr: 'इस ब्राउज़र में बोलकर बात करना उपलब्ध नहीं है। कृपया Chrome, Edge या Safari इस्तेमाल करें, या लिखकर पूछिए।', hello: 'नमस्ते', hello2: 'नमस्ते!', novoice: 'अभी आवाज़ उपलब्ध नहीं है।', tap: 'आवाज़ चालू करने के लिए माइक या स्पीकर दबाइए', resume: 'बातचीत जारी रखने के लिए माइक दबाइए', code6: '6 अंकों का कोड डालिए।', name: 'कृपया अपना नाम डालिए।', phone: 'सही 10 अंकों का मोबाइल नंबर डालिए।', email: 'सही ईमेल पता डालिए।', src: 'हमारी साइट से' },
-    en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
-  const tr = k => T[lang][k];
+  // Widget text is English; the assistant itself mirrors the visitor's language (English / Hindi / Hinglish).
+  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
+  const tr = k => T.en[k];
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
@@ -81,7 +80,7 @@
   function enter(d) {
     if (d.token) { token = d.token; store.set('aw_token', token); }
     visitor = (d.name || '').split(' ')[0]; visitorPhone = d.phone || ''; visitorCity = d.city || '';
-    el.hello.textContent = visitor ? tr('hello') + ', ' + visitor + (lang === 'hi' ? ' जी!' : '!') : tr('hello2');
+    el.hello.textContent = visitor ? tr('hello') + ', ' + visitor + '!' : tr('hello2');
     if (typeof d.left === 'number') leftHint(d.left);
     show('chat'); setTimeout(() => el.text.focus(), 350);
     const st = loadState(), restored = !!(st && st.items && st.items.length);
@@ -147,7 +146,14 @@
 
   /* ---------- chat: everything visible is kept in `items` (sessionStorage) so the conversation survives refresh and page changes ---------- */
   let items = [], visitorPhone = '', visitorCity = '';
-  const SKEY = 'aw_state';
+  const SKEY = 'aw_state', CKEY = 'aw_cid';
+  // One id per conversation. The server keeps its memory under this id, so a page refresh or the new-chat button always
+  // starts a clean conversation (nothing from the old one can leak back), while moving between pages keeps the same chat.
+  const newCid = () => Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  const nav0 = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+  if (nav0.type === 'reload') { try { sessionStorage.removeItem(SKEY); sessionStorage.removeItem(CKEY); } catch (e) {} }
+  try { cid = sessionStorage.getItem(CKEY) || ''; } catch (e) {}
+  if (!cid) { cid = newCid(); try { sessionStorage.setItem(CKEY, cid); } catch (e) {} }
   let ready = false;   // do not overwrite the saved conversation before it has been restored
   const persist = () => { if (!ready) return; try { sessionStorage.setItem(SKEY, JSON.stringify({ open: ag.classList.contains('is-open'), items: items.slice(-40), history: history.slice(-6), sent, rated, voice: voiceMode, lang })); } catch (e) {} };
   const loadState = () => { try { return JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { return null; } };
@@ -200,7 +206,7 @@
     if (Date.now() < cooldownUntil) { status(tr('wait') + Math.ceil((cooldownUntil - Date.now()) / 1000) + tr('sec')); return; }
     busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); add('user', text); const t = typing(); status(viaVoice ? tr('think') : '');
     let r;
-    try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-6), voice: !!(viaVoice || voiceMode) }); }
+    try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-6), voice: !!(viaVoice || voiceMode), cid }); }
     catch (err) { r = { ok: false, status: 0, data: { message: tr('conn') } }; }
     t.remove(); busy = false; ag.classList.remove('busy'); status('');
     if (r.status === 401 && r.data.gate) { store.del('aw_token'); token = ''; show('lead'); return; }
@@ -234,6 +240,7 @@
     const wasVoice = voiceMode;
     stopAll(); history = []; sent = 0; busy = false; items = []; try { sessionStorage.removeItem(SKEY); } catch (e) {}
     Array.from(el.msgs.children).forEach(n => { if (n !== el.hero) n.remove(); }); el.hero.classList.remove('gone'); el.text.value = ''; el.text.disabled = false; el.mic.classList.remove('resume');
+    cid = newCid(); try { sessionStorage.setItem(CKEY, cid); } catch (e) {}
     if (token) api(ag.dataset.reset, {}).catch(() => {});
     if (state !== 'chat' && token) show('chat'); else if (!token) { show('lead'); return; }
     ready = true; persist();

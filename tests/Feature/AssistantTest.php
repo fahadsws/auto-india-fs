@@ -188,7 +188,7 @@ class AssistantTest extends TestCase
         $this->fakeAi();
         $res = $this->postJson('/assistant/chat', ['message' => 'Is diesel better than petrol for long drives?'], ['X-Assistant-Token' => $token])->assertOk();
         $this->assertSame([], $res->json('links'));
-        $this->assertStringNotContainsString('FROM OUR WEBSITE', $this->aiPayload());
+        $this->assertStringNotContainsString('DATA (live from our website', $this->aiPayload());
     }
 
     public function test_site_question_uses_website_data_and_returns_links(): void
@@ -198,7 +198,7 @@ class AssistantTest extends TestCase
         $this->fakeAi();
         $res = $this->postJson('/assistant/chat', ['message' => 'What is the price of the Creta?'], ['X-Assistant-Token' => $token])->assertOk()->assertJsonPath('source', 'kb');
         $this->assertSame('Hyundai Creta', $res->json('links.0.title'));
-        $this->assertStringContainsString('FROM OUR WEBSITE', $this->aiPayload());
+        $this->assertStringContainsString('DATA (live from our website', $this->aiPayload());
     }
 
     public function test_tts_without_key_returns_204_so_browser_voice_is_used(): void
@@ -307,6 +307,7 @@ class AssistantTest extends TestCase
         $this->listing(['title' => 'Hyundai Creta SX Diesel', 'slug' => 'creta-sx', 'price' => 790000]);
         $this->listing(['title' => 'Maruti Baleno Petrol', 'slug' => 'baleno', 'brand' => 'Maruti Suzuki', 'model' => 'Baleno', 'fuel' => 'Petrol', 'price' => 1200000]);
         $this->listing(['title' => 'Tata Nexon Mumbai Diesel', 'slug' => 'nexon', 'brand' => 'Tata', 'model' => 'Nexon', 'city' => 'Mumbai', 'price' => 600000]);
+        \App\Models\Listing::where('slug', 'creta-sx')->update(['updated_at' => now()->addMinutes(5)]);   // newest first = deterministic order
     }
 
     public function test_filter_question_is_answered_from_the_database_with_real_values(): void
@@ -408,174 +409,234 @@ class AssistantTest extends TestCase
         return $this->postJson('/assistant/chat', ['message' => $message, 'history' => $history], ['X-Assistant-Token' => $token]);
     }
 
-    public function test_used_car_request_makes_the_ai_ask_the_city_then_remembers_and_shows_cars(): void
+    private function toCreta(string $token): void
+    {
+        $this->chat($token, 'I want a used car');
+        $this->chat($token, 'Pune');
+        $this->chat($token, 'first one');
+    }
+
+    private function lastLog(): \App\Models\ChatLog { return \App\Models\ChatLog::latest('id')->first(); }
+
+    public function test_generic_car_request_shows_real_cars_straight_away_with_one_question_and_no_bare_link(): void
     {
         $this->seedStock();
         $token = $this->verified();
-        $this->aiText = 'ज़रूर! आप किस शहर में देख रहे हैं?';
+        $this->aiText = 'Here are a few good options from our stock. Which city are you in? And what budget do you have? See https://example.com/cars';
+        $this->fakeAi();
+
+        $res = $this->chat($token, 'muje car batao')->assertOk();                         // the exact message that used to return only a URL
+        $this->assertNotEmpty($res->json('links'));                                        // real cards from the database
+        $this->assertContains('Hyundai Creta SX Diesel', collect($res->json('links'))->pluck('title')->all());
+        $this->assertStringNotContainsString('http', $res->json('answer'));                // no pasted links
+        $this->assertLessThanOrEqual(1, substr_count($res->json('answer'), '?'));          // never several questions at once
+        $this->assertStringContainsString('Do NOT ask any question', $this->aiPayload());  // the app asks the one question, not the model
+        $this->assertStringContainsString('Hyundai Creta SX Diesel', $this->aiPayload());  // the AI answered from real stock
+        $this->assertMatchesRegularExpression('/new car or a used one|purani/', $res->json('answer'));
+        $this->assertSame('type', AssistantSession::first()->memory['ask']);
+    }
+
+    public function test_without_the_ai_the_data_is_still_shown_from_the_database(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        Http::fake();
+        Setting::put('ai.api_key', '');
+        $res = $this->chat($token, 'show me used cars in Pune under 8 lakh')->assertOk();
+        $this->assertStringContainsString('Hyundai Creta SX Diesel', $res->json('answer'));
+        $this->assertStringContainsString('7.9 Lakh', $res->json('answer'));
+        $this->assertSame('Hyundai Creta SX Diesel', $res->json('links.0.title'));
+        Http::assertNothingSent();
+    }
+
+    public function test_used_car_request_shows_cars_then_asks_city_then_remembers_and_offers_a_test_drive(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
         $this->fakeAi();
 
         $r1 = $this->chat($token, 'mujhe used car chaiye')->assertOk();
-        $this->assertSame('ज़रूर! आप किस शहर में देख रहे हैं?', $r1->json('answer'));          // the AI asks, in its own words - no canned buttons
-        $this->assertStringContainsString('which city or area', $this->aiPayload());
-        $this->assertNull($r1->json('quick'));
-        $this->assertSame([], $r1->json('links'));                                           // no random list before the question is answered
+        $this->assertNotEmpty($r1->json('links'));                                           // shown first...
+        $this->assertStringContainsString('city', Str::lower($r1->json('answer')));          // ...then ONE question about the city
+        $this->assertNull($r1->json('quick'));                                               // no chips / buttons
 
-        $this->aiText = 'पुणे में यह गाड़ी मिली है।';
-        $r2 = $this->chat($token, 'Pune')->assertOk();                                   // just the answer - must not be forgotten
+        $r2 = $this->chat($token, 'Pune')->assertOk();                                      // just the answer - must not be forgotten
         $this->assertSame('Hyundai Creta SX Diesel', $r2->json('links.0.title'));
-        $this->assertStringContainsString('Pune', $this->aiPayload());
-        $this->assertStringContainsString('Wants: looking for a used car', $this->aiPayload());   // compact memory block, not full history
-        $this->assertNotNull(AssistantSession::first()->memory['shown'][0]);
+        $this->assertNotContains('Tata Nexon Mumbai Diesel', collect($r2->json('links'))->pluck('title')->all());   // Mumbai car
+        $this->assertStringContainsString('Wants: looking for a used car', $this->aiPayload());   // compact memory block
+        $this->assertStringContainsString('test drive', Str::lower($r2->json('answer')));          // one soft offer, once
+        $this->assertSame('offer', AssistantSession::first()->memory['ask']);
     }
 
-    public function test_hindi_message_in_devanagari_runs_the_same_database_lookup(): void
+    public function test_test_drive_is_taken_one_question_at_a_time_and_saved_in_the_database(): void
     {
         $this->seedStock();
         $token = $this->verified();
         $this->fakeAi();
-        $res = $this->chat($token, 'मुझे पुणे में 8 लाख से कम की डीज़ल गाड़ी चाहिए')->assertOk();
-        $this->assertSame('Hyundai Creta SX Diesel', $res->json('links.0.title'));
-        $this->assertStringNotContainsString('Nexon', $this->aiPayload());
-        $this->assertSame('hi', $res->json('lang'));
-        $this->assertStringContainsString('Devanagari', $this->aiPayload());       // the persona says: answer in Hindi
-    }
+        $this->chat($token, 'I want a used car');
+        $this->chat($token, 'Pune');                                                         // ... "want a test drive of the Creta?"
+        $calls = count(Http::recorded());
 
-    public function test_hindi_is_the_default_and_english_messages_switch_to_english(): void
-    {
-        $token = $this->verified();
-        $this->fakeAi();
-        $this->chat($token, 'Which SUV has the best mileage?')->assertOk()->assertJsonPath('lang', 'en');
-        $this->assertStringContainsString('reply in simple English', $this->aiPayload());
-        $this->chat($token, 'पेट्रोल या डीज़ल, कौन सा बेहतर है?')->assertOk()->assertJsonPath('lang', 'hi');
-        $this->assertStringContainsString('HINDI', $this->aiPayload());
-    }
+        $q1 = $this->chat($token, 'yes')->assertOk();
+        $this->assertStringContainsString('Which day', $q1->json('answer'));
+        $this->assertSame(1, substr_count($q1->json('answer'), '?'));
+        $this->assertSame(0, \App\Models\Lead::where('type', 'test_drive')->count());       // nothing saved yet
 
-    public function test_picking_a_shown_car_and_asking_for_a_test_drive_gives_the_ai_the_context_not_a_form(): void
-    {
-        $this->seedStock();
-        $token = $this->verified();
-        $this->fakeAi();
-        $this->chat($token, 'used car chahiye');
-        $this->chat($token, 'Pune');
-        $sel = $this->chat($token, 'pehli wali')->assertOk();
-        $this->assertSame('Hyundai Creta SX Diesel', $sel->json('focus.t'));
-        $this->assertStringContainsString('They just picked Hyundai Creta SX Diesel', $this->aiPayload());
+        $q2 = $this->chat($token, 'kal')->assertOk();
+        $this->assertStringContainsString('morning', $q2->json('answer'));
+        $q3 = $this->chat($token, 'subah 10 baje')->assertOk();
+        $this->assertStringContainsString('showroom', $q3->json('answer'));
+        $recap = $this->chat($token, 'showroom')->assertOk();
+        $this->assertStringContainsString('Hyundai Creta SX Diesel', $recap->json('answer'));
+        $this->assertStringContainsString('Shall I book it', $recap->json('answer'));
+        $this->assertSame(0, \App\Models\Lead::where('type', 'test_drive')->count());       // still waiting for the visitor's yes
 
-        $book = $this->chat($token, 'test drive book karni hai')->assertOk();
-        $this->assertSame([], $book->json('actions'));                                   // no booking card / buttons
-        $this->assertNull($book->json('quick'));
-        $this->assertStringContainsString('wants a test drive for Hyundai Creta SX Diesel', $this->aiPayload());
-        $this->assertSame('test_drive', AssistantSession::first()->memory['flow']['kind']);
-        $this->assertSame(0, \App\Models\Lead::where('type', 'test_drive')->count());   // nothing is saved until the visitor confirms
-    }
-
-    private function toCreta(string $token): void
-    {
-        $this->chat($token, 'used car chahiye');
-        $this->chat($token, 'Pune');
-        $this->chat($token, 'pehli wali');
-    }
-
-    public function test_ai_confirmed_test_drive_is_saved_as_a_lead_with_the_car_and_dedupes(): void
-    {
-        $this->seedStock();
-        $token = $this->verified();
-        $this->fakeAi();
-        $this->toCreta($token);
-        $car = \App\Models\Listing::where('slug', 'creta-sx')->first();
-        $date = now()->addDays(2)->toDateString();
-
-        $this->aiText = 'ठीक है, आपकी टेस्ट ड्राइव नोट कर ली है।'."\n".'[[LEAD {"kind":"test_drive","car":1,"date":"'.$date.'","slot":"afternoon","place":"showroom"}]]';
-        $res = $this->chat($token, 'haan confirm karo')->assertOk();
-
+        $done = $this->chat($token, 'haan')->assertOk();
         $lead = \App\Models\Lead::where('type', 'test_drive')->first();
-        $this->assertSame($car->id, $lead->listing_id);
+        $this->assertNotNull($lead);
+        $this->assertSame(\App\Models\Listing::where('slug', 'creta-sx')->value('id'), $lead->listing_id);
         $this->assertSame('rahul@example.com', $lead->email);
         $this->assertSame('9876543210', $lead->phone);
         $this->assertSame('chatbot', $lead->source);
-        $this->assertStringContainsString('Hyundai Creta SX Diesel', $lead->message);
-        $this->assertStringContainsString('12 pm - 4 pm', $lead->message);
-        $this->assertSame('TD-'.$lead->id, $res->json('captured.ref'));
-        $this->assertStringNotContainsString('[[LEAD', $res->json('answer'));              // the hidden line never reaches the visitor
-        $this->assertStringContainsString('TD-'.$lead->id, $res->json('answer'));          // the SERVER adds the real reference
-        $this->assertSame('booked', AssistantSession::first()->memory['stage']);
+        $this->assertStringContainsString('9 am - 12 pm', $lead->message);
+        $this->assertStringContainsString('at the showroom', $lead->message);
+        $this->assertStringContainsString(now()->addDay()->format('D, d M Y'), $lead->message);
+        $this->assertSame('TD-'.$lead->id, $done->json('captured.ref'));
+        $this->assertStringContainsString('TD-'.$lead->id, $done->json('answer'));
         $this->assertNull(AssistantSession::first()->memory['flow']);
-
-        $this->chat($token, 'haan confirm karo')->assertOk();                             // same car again -> updated, not duplicated
-        $this->assertSame(1, \App\Models\Lead::where('type', 'test_drive')->count());
-
-        $this->aiText = 'Done.'."\n".'[[LEAD {"kind":"inspection","car":"Hyundai Creta","date":"'.$date.'","slot":"morning","place":"home","address":"Baner, Pune"}]]';
-        $this->chat($token, 'inspection ghar par karwana hai, Baner Pune')->assertOk();
-        $this->assertSame(1, \App\Models\Lead::where('type', 'inspection')->count());
-        $this->assertStringContainsString("customer's address: Baner, Pune", \App\Models\Lead::where('type', 'inspection')->first()->message);
+        $this->assertSame($calls, count(Http::recorded()));                                   // the whole booking cost zero AI tokens
     }
 
-    public function test_incomplete_or_invalid_booking_is_never_claimed_as_saved(): void
+    public function test_one_message_can_answer_several_questions_and_home_visit_needs_an_address(): void
     {
         $this->seedStock();
         $token = $this->verified();
         $this->fakeAi();
-        $this->toCreta($token);
-
-        foreach ([
-            '{"kind":"test_drive","car":1,"date":"'.now()->subDay()->toDateString().'","slot":"morning","place":"showroom"}',    // past date
-            '{"kind":"test_drive","car":1,"date":"'.now()->addDays(60)->toDateString().'","slot":"morning","place":"showroom"}', // too far
-            '{"kind":"test_drive","car":1,"date":"'.now()->addDay()->toDateString().'","slot":"morning","place":"home"}',        // home but no address
-            '{"kind":"test_drive","car":9,"date":"'.now()->addDay()->toDateString().'","slot":"morning","place":"showroom"}',    // no such car in the list
-            '{"kind":"test_drive","car":1,"slot":"morning","place":"showroom"}',                                                  // no date
-            '{"kind":"wat"}',
-        ] as $json) {
-            $this->aiText = "बुक हो गया! 🎉\n[[LEAD $json]]";
-            $res = $this->chat($token, 'haan pakka karo')->assertOk();
-            $this->assertStringNotContainsString('बुक हो गया', $res->json('answer'));      // the AI's premature claim is replaced
-            $this->assertStringNotContainsString('[[', $res->json('answer'));
-            $this->assertNull($res->json('captured'));
-        }
-        $this->assertSame(0, \App\Models\Lead::whereIn('type', ['test_drive', 'inspection', 'enquiry'])->count());
+        $this->chat($token, 'I want a used car');
+        $this->chat($token, 'Pune');
+        $this->chat($token, 'first one');
+        $r = $this->chat($token, 'inspection tomorrow evening at my home')->assertOk();    // inspection + date + slot + place in one go
+        $this->assertStringContainsString('full address', $r->json('answer'));
+        $recap = $this->chat($token, 'B-12 Baner road, near Orchid school')->assertOk();
+        $this->assertStringContainsString('at your address (B-12 Baner road', $recap->json('answer'));
+        $this->chat($token, 'yes')->assertOk()->assertJsonPath('captured.kind', 'inspection');
+        $lead = \App\Models\Lead::where('type', 'inspection')->first();
+        $this->assertStringContainsString("customer's address: B-12 Baner road", $lead->message);
+        $this->assertStringContainsString('4 pm - 8 pm', $lead->message);
     }
 
-    public function test_general_enquiry_is_saved_from_the_conversation_without_a_car(): void
+    public function test_a_question_in_the_middle_of_a_booking_is_answered_then_the_booking_continues(): void
     {
+        $this->seedStock();
         $token = $this->verified();
-        $this->aiText = 'ठीक है, हमारी टीम कॉल करेगी।'."\n".'[[LEAD {"kind":"enquiry","topic":"Car loan EMI for a 9 lakh car","city":"Indore","budget":"9 lakh","callback":"evening 6-8"}]]';
+        $this->aiText = 'The Creta gives around 18 km/l.';
         $this->fakeAi();
-        $res = $this->chat($token, 'haan, shaam ko call karwa dijiye')->assertOk();
-        $lead = \App\Models\Lead::where('type', 'enquiry')->first();
-        $this->assertNotNull($lead);
-        $this->assertSame('Indore', $lead->city);
-        $this->assertStringContainsString('Car loan EMI', $lead->message);
-        $this->assertStringContainsString('Budget: 9 lakh', $lead->message);
-        $this->assertSame('EQ-'.$lead->id, $res->json('captured.ref'));
-
-        $this->aiText = "ठीक है।\n[[LEAD {\"kind\":\"enquiry\"}]]";                     // nothing to save -> asks for the topic, saves nothing
-        $this->chat($token, 'haan')->assertOk()->assertJsonPath('captured', null);
-        $this->assertSame(1, \App\Models\Lead::where('type', 'enquiry')->count());
+        $this->chat($token, 'I want a used car');
+        $this->chat($token, 'Pune');
+        $this->chat($token, 'first one');
+        $this->chat($token, 'I want a test drive')->assertOk();
+        $r = $this->chat($token, 'what is the mileage of the Creta diesel?')->assertOk();
+        $this->assertStringContainsString('18 km/l', $r->json('answer'));                  // the AI answered
+        $this->assertStringContainsString('Which day', $r->json('answer'));                // ...and the booking question is back
+        $this->assertSame('test_drive', AssistantSession::first()->memory['flow']['kind']);
+        $this->chat($token, 'never mind')->assertOk();
+        $this->assertNull(AssistantSession::first()->memory['flow']);
+        $this->assertSame(0, \App\Models\Lead::count() - \App\Models\Lead::where('type', 'chatbot')->count());
     }
 
-    public function test_a_reply_cut_off_in_the_middle_of_the_lead_line_is_cleaned_and_not_saved(): void
+    public function test_dates_out_of_range_or_unclear_are_asked_again_never_saved(): void
     {
+        $this->seedStock();
         $token = $this->verified();
-        $this->aiText = "ज़रूर, बुक कर देता हूँ।\n[[LEAD {\"kind\":\"test_dri";
         $this->fakeAi();
-        $res = $this->chat($token, 'haan')->assertOk();
-        $this->assertStringNotContainsString('LEAD', $res->json('answer'));
+        $this->chat($token, 'I want a used car');
+        $this->chat($token, 'Pune');
+        $this->chat($token, 'first one');
+        $this->chat($token, 'I want a test drive');
+        $far = $this->chat($token, 'in 45 days')->assertOk();
+        $this->assertStringContainsString('next 30 days', $far->json('answer'));
+        $this->assertStringContainsString('Which day', $far->json('answer'));
+        $this->assertStringContainsString("didn't catch", $this->chat($token, 'hmm')->json('answer'));
         $this->assertSame(0, \App\Models\Lead::where('type', 'test_drive')->count());
     }
 
-    public function test_persona_teaches_the_ai_to_collect_details_and_knows_todays_date_and_our_pages(): void
+    public function test_enquiries_callback_sell_and_loan_are_saved_after_confirmation(): void
     {
-        \App\Models\Page::create(['title' => 'Car exchange offer', 'slug' => 'exchange-offer', 'status' => 'published', 'body' => '<p>Exchange your old car and get an extra bonus of 25000 rupees.</p>']);
-        \Illuminate\Support\Facades\Cache::forget('asst:pageindex');
         $token = $this->verified();
         $this->fakeAi();
-        $this->chat($token, 'koi achhi car batao')->assertOk();
-        $p = $this->aiPayload();
-        $this->assertStringContainsString('[[LEAD', $p);
-        $this->assertStringContainsString(now()->format('Y-m-d'), $p);
-        $this->assertStringContainsString('ALREADY verified', $p);                      // never asks for name / phone again
-        $this->assertStringContainsString('Car exchange offer', $p);                    // dynamic pages are listed for the AI
-        $this->assertStringContainsString('/exchange-offer', $p);
+        $q = $this->chat($token, 'please call me back')->assertOk();
+        $this->assertStringContainsString('best time', $q->json('answer'));
+        $recap = $this->chat($token, 'evening after 6')->assertOk();
+        $this->assertStringContainsString('Shall I send it', $recap->json('answer'));
+        $done = $this->chat($token, 'yes')->assertOk();
+        $lead = \App\Models\Lead::where('type', 'enquiry')->first();
+        $this->assertSame('EQ-'.$lead->id, $done->json('captured.ref'));
+        $this->assertStringContainsString('Callback request', $lead->message);
+        $this->assertStringContainsString('evening after 6', $lead->message);
+
+        $sell = $this->chat($token, 'I want to sell my car')->assertOk();
+        $this->assertStringContainsString('which car', Str::lower($sell->json('answer')));
+        $this->chat($token, '2018 Swift Dzire diesel, 60000 km');
+        $this->chat($token, 'tomorrow evening');
+        $this->chat($token, 'yes')->assertOk();
+        $this->assertSame(2, \App\Models\Lead::where('type', 'enquiry')->count());
+        $this->assertStringContainsString('2018 Swift Dzire', \App\Models\Lead::where('type', 'enquiry')->latest('id')->first()->message);
+    }
+
+    public function test_a_new_chat_or_page_refresh_starts_clean_and_idle_chats_expire(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $h = ['X-Assistant-Token' => $token];
+        $this->postJson('/assistant/chat', ['message' => 'used car chahiye', 'cid' => 'chat-A'], $h)->assertOk();
+        $this->postJson('/assistant/chat', ['message' => 'Pune', 'cid' => 'chat-A'], $h)->assertOk();
+        $this->assertSame('Pune', AssistantSession::first()->memory['f']['city']);
+
+        // same visitor, new chat id (refresh / new chat): nothing from the old conversation is used
+        $this->postJson('/assistant/chat', ['message' => 'koi achhi car batao', 'cid' => 'chat-B', 'history' => [['role' => 'user', 'content' => 'old secret message']]], $h)->assertOk();
+        $this->assertStringNotContainsString('Wants: looking for a used car', $this->aiPayload());
+        $this->assertStringNotContainsString('old secret message', $this->aiPayload());
+        $this->assertArrayNotHasKey('city', AssistantSession::first()->memory['f']);
+        $this->assertSame('chat-B', AssistantSession::first()->memory['cid']);
+
+        // a chat silent for 30+ minutes starts over, even with the same chat id
+        $this->postJson('/assistant/chat', ['message' => 'used car chahiye', 'cid' => 'chat-B'], $h)->assertOk();
+        $this->postJson('/assistant/chat', ['message' => 'Pune', 'cid' => 'chat-B'], $h)->assertOk();
+        $this->assertSame('Pune', AssistantSession::first()->memory['f']['city']);
+        AssistantSession::first()->forceFill(['last_message_at' => now()->subMinutes(45)])->save();
+        $this->postJson('/assistant/chat', ['message' => 'koi achhi car batao', 'cid' => 'chat-B'], $h)->assertOk();
+        $this->assertArrayNotHasKey('city', AssistantSession::first()->memory['f']);
+    }
+
+    public function test_news_and_video_requests_show_real_articles(): void
+    {
+        \App\Models\Article::create(['title' => 'Tata Nexon facelift launched', 'slug' => 'nexon-facelift', 'excerpt' => 'New Nexon is here', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHour()]);
+        \App\Models\Article::create(['title' => 'Maruti Brezza review', 'slug' => 'brezza-review', 'excerpt' => 'Brezza reviewed', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHours(3)]);
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->chat($token, 'latest news dikhao')->assertOk();
+        $this->assertSame(['Tata Nexon facelift launched', 'Maruti Brezza review'], collect($res->json('links'))->pluck('title')->all());
+        $this->assertStringContainsString('Tata Nexon facelift launched', $this->aiPayload());
+        $one = $this->chat($token, 'Brezza news')->assertOk();
+        $this->assertSame('Maruti Brezza review', $one->json('links.0.title'));
+        $this->assertSame('content', $this->lastLog()->sources['mode']);
+    }
+
+    public function test_view_all_link_opens_a_page_that_shows_exactly_the_cars_the_assistant_counted(): void
+    {
+        $this->seedStock();                                    // Creta Pune 7.9L diesel, Baleno Pune 12L petrol, Nexon Mumbai 6L diesel
+        $this->listing(['title' => 'Old Creta 2014', 'slug' => 'old-creta', 'year' => 2014, 'price' => 300000, 'city' => 'Pune', 'fuel' => 'Diesel']);
+        $f = \App\Services\SiteData::parse('diesel used cars in Pune under 8 lakh');
+        $url = \App\Services\SiteData::browseUrl($f);
+        $this->assertStringContainsString('price_max=800000', $url);
+        $this->assertStringContainsString('city%5B0%5D=Pune', $url);
+        $page = $this->get($url)->assertOk();
+        $page->assertSee('Hyundai Creta SX Diesel')->assertSee('Old Creta 2014')->assertDontSee('Maruti Baleno')->assertDontSee('Tata Nexon Mumbai');
+
+        $this->get('/cars?year_min=2018')->assertOk()->assertDontSee('Old Creta 2014')->assertSee('Hyundai Creta SX Diesel');
+        $this->get('/cars?km_max=50000&owner=1')->assertOk()->assertSee('Hyundai Creta SX Diesel');
+        $this->get('/cars?price_min=1000000')->assertOk()->assertSee('Maruti Baleno')->assertDontSee('Hyundai Creta SX Diesel');
     }
 
     public function test_dynamic_page_content_answers_questions_even_without_site_words(): void
@@ -588,18 +649,39 @@ class AssistantTest extends TestCase
         $this->assertSame('Exchange bonus scheme', $res->json('links.0.title'));
     }
 
-    public function test_no_manual_booking_buttons_remain_in_the_widget(): void
+    public function test_ai_text_is_cleaned_of_links_and_extra_questions(): void
+    {
+        $token = $this->verified();
+        $this->aiText = 'Great choice. Do you like diesel? Or petrol? Check https://x.test/page now.';
+        $this->fakeAi();
+        $a = $this->chat($token, 'koi achhi suv ke baare mein batao yaar')->assertOk()->json('answer');
+        $this->assertStringNotContainsString('http', $a);
+        $this->assertLessThanOrEqual(1, substr_count($a, '?'));
+    }
+
+    public function test_widget_has_no_manual_booking_buttons_no_hindi_ui_and_a_chat_id(): void
     {
         $html = $this->get('/assistant')->assertOk()->getContent();
         $this->assertStringNotContainsString('Book showroom visit', $html);
         $this->assertStringNotContainsString('Book test drive', $html);
-        $this->assertStringContainsString('नमस्ते', $html);                              // Hindi by default
         $this->assertStringNotContainsString('data-book=', $html);
+        $this->assertDoesNotMatchRegularExpression('/[\x{0900}-\x{097F}]/u', $html);       // the widget text is English
         $js = file_get_contents(public_path('js/site.js'));
-        $this->assertStringNotContainsString('data-a="test_drive"', $js);
+        $this->assertDoesNotMatchRegularExpression('/[\x{0900}-\x{097F}]/u', $js);
         $this->assertStringNotContainsString('aw-car-act', $js);
+        $this->assertStringContainsString('aw_cid', $js);
         $this->assertContains($this->postJson('/assistant/book', [])->status(), [404, 405]);    // the manual endpoints are gone
         $this->assertContains($this->postJson('/assistant/select', [])->status(), [404, 405]);
+    }
+
+    public function test_hindi_devanagari_messages_still_run_the_database_lookup(): void
+    {
+        $this->seedStock();
+        $token = $this->verified();
+        $this->fakeAi();
+        $res = $this->chat($token, 'मुझे पुणे में 8 लाख से कम की डीज़ल गाड़ी चाहिए')->assertOk();
+        $this->assertSame('Hyundai Creta SX Diesel', $res->json('links.0.title'));
+        $this->assertNotContains('Tata Nexon Mumbai Diesel', collect($res->json('links'))->pluck('title')->all());
     }
 
     public function test_show_all_opens_the_real_filtered_page(): void
@@ -629,9 +711,8 @@ class AssistantTest extends TestCase
         $first = $this->chat($token, 'hello')->json('answer');
         $second = $this->chat($token, 'hi')->json('answer');
         $this->assertNotSame($first, $second);
-        $this->assertStringContainsString('नमस्ते', $first);                              // Hindi is the default language
-        $this->assertStringNotContainsString('नमस्ते', $second);
-        $this->assertStringContainsString('मैं यहीं हूँ', $second);
+        $this->assertStringNotContainsString('Good to see you', $second);
+        $this->assertStringContainsString("I'm right here", $second);
     }
 
     public function test_context_sent_to_the_ai_stays_small(): void
@@ -643,7 +724,7 @@ class AssistantTest extends TestCase
         foreach (range(1, 6) as $i) { $history[] = ['role' => $i % 2 ? 'user' : 'assistant', 'content' => str_repeat("old message $i ", 60)]; }
         $this->chat($token, 'Show me diesel used cars in Pune under 8 lakh', $history)->assertOk();
         $payload = json_decode($this->aiPayload(), true);
-        $this->assertLessThanOrEqual(8, count($payload['messages']));            // system + at most 6 history + question
+        $this->assertLessThanOrEqual(6, count($payload['messages']));            // system + at most 4 history + question
         $this->assertLessThan(9000, strlen($payload['messages'][0]['content']));  // compact system prompt incl. rules and the data block
         $this->assertStringNotContainsString('old message 1 ', $this->aiPayload());
     }

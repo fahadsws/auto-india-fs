@@ -10,30 +10,15 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * Conversation -> database. The AI collects the details by talking (car, date, time, place, budget, callback...) and,
- * once the visitor has confirmed, ends its reply with ONE hidden line:
- *     [[LEAD {"kind":"test_drive","car":2,"date":"2026-10-03","slot":"morning","place":"showroom"}]]
- * This class strips that line out of the visible reply, validates it against real data (the car must exist, the date
- * must be in the next 30 days...) and only then writes the lead. Nothing the visitor sees is claimed unless it was saved.
+ * Conversation -> database. AssistantFlow collects the details in conversation; this validates them against real data
+ * (the car must still exist, the date must be in the next 30 days, valid slot/place, address for a home visit) and only
+ * then writes the lead, so nothing is ever confirmed to the visitor that was not saved.
  */
 class AssistantCapture
 {
     public const SLOTS = ['morning' => '9 am - 12 pm', 'afternoon' => '12 pm - 4 pm', 'evening' => '4 pm - 8 pm'];
     public const KINDS = ['test_drive' => 'Test drive', 'inspection' => 'Inspection', 'enquiry' => 'Enquiry'];
     private const PREFIX = ['test_drive' => 'TD', 'inspection' => 'IN', 'enquiry' => 'EQ'];
-
-    /** @return array{0:string,1:?array} visible text without the hidden line, and the decoded request (null when there was none). */
-    public static function extract(string $answer): array
-    {
-        $req = null;
-        if (preg_match('/\[\[\s*LEAD\s*(\{.*?\})\s*\]\]/s', $answer, $m)) {
-            $req = json_decode($m[1], true) ?? json_decode(preg_replace('/,\s*([}\]])/', '$1', $m[1]), true);
-            $req = is_array($req) ? $req : ['kind' => '_invalid'];
-        }
-        $text = preg_replace('/\[\[\s*LEAD.*?\]\]/s', '', $answer);
-        $text = preg_replace('/\[\[\s*LEAD.*$/s', '', $text);   // reply cut off in the middle of the line
-        return [trim($text), $req];
-    }
 
     /**
      * Validate and save. @return array{ok:bool, ref?:string, kind?:string, car?:?string, when?:?string, missing?:array<string>, lead?:Lead}
@@ -98,23 +83,14 @@ class AssistantCapture
         return ['ok' => true, 'kind' => $kind, 'ref' => self::PREFIX[$kind].'-'.$lead->id, 'car' => $item['t'] ?? null, 'when' => $when, 'item' => $item, 'lead' => $lead];
     }
 
-    /** The visitor-facing line the SERVER appends after a successful save (never a claim the AI made up). */
+    /** The line shown to the visitor after a successful save (a real reference, never invented). */
     public static function confirmation(array $r, bool $hi): string
     {
-        $what = ['test_drive' => [$hi ? 'टेस्ट ड्राइव' : 'Test drive'], 'inspection' => [$hi ? 'इंस्पेक्शन' : 'Inspection'], 'enquiry' => [$hi ? 'आपकी पूछताछ' : 'Your enquiry']][$r['kind']][0];
-        if ($hi) {
-            return "✅ {$what} दर्ज हो गई".($r['car'] ? " — {$r['car']}" : '').($r['when'] ? " ({$r['when']})" : '').". रेफ़रेंस: {$r['ref']}. हमारी टीम आपको कॉल करके कन्फ़र्म करेगी।";
-        }
-        return "✅ $what saved".($r['car'] ? " for {$r['car']}" : '').($r['when'] ? " ({$r['when']})" : '').". Reference: {$r['ref']}. Our team will call you to confirm.";
-    }
-
-    /** When the AI claimed a booking but the details were incomplete, say exactly what is still needed. */
-    public static function missingLine(array $missing, bool $hi): string
-    {
-        $names = ['car' => ['कौन-सी गाड़ी', 'which car'], 'date' => ['कौन-सी तारीख़ (अगले 30 दिनों में)', 'which date (within the next 30 days)'], 'time' => ['कौन-सा समय (सुबह/दोपहर/शाम)', 'what time (morning/afternoon/evening)'],
-            'place' => ['शोरूम पर या आपके पते पर', 'at the showroom or at your address'], 'address' => ['आपका पता', 'your address'], 'topic' => ['आप किस बारे में जानना चाहते हैं', 'what you need help with'], 'details' => ['थोड़ी और जानकारी', 'a few more details'], 'contact' => ['आपका संपर्क', 'your contact']];
-        $list = collect($missing)->map(fn ($k) => $names[$k][$hi ? 0 : 1] ?? $k)->implode(', ');
-        return $hi ? "अभी मेरे पास पूरी जानकारी नहीं है — कृपया बताइए: $list।" : "I still need a little more to save this — please tell me: $list.";
+        $what = ['test_drive' => 'Test drive', 'inspection' => 'Inspection', 'enquiry' => 'Your request'][$r['kind']];
+        $tail = ($r['car'] ? ' for '.$r['car'] : '').($r['when'] ? ' ('.$r['when'].')' : '');
+        return $hi
+            ? "✅ $what book ho gayi{$tail}. Reference: {$r['ref']}. Hamari team aapko call karke confirm karegi."
+            : "✅ $what booked{$tail}. Reference: {$r['ref']}. Our team will call you to confirm.";
     }
 
     /** A car number from the list we just showed (1-based), a title, or the car they picked earlier. */
@@ -122,7 +98,8 @@ class AssistantCapture
     {
         $shown = $m['shown'] ?? [];
         $item = null;
-        if (is_numeric($ref) && isset($shown[(int) $ref - 1])) $item = $shown[(int) $ref - 1];
+        if (is_array($ref) && isset($ref['k'], $ref['id'])) $item = $ref;
+        elseif (is_numeric($ref) && isset($shown[(int) $ref - 1])) $item = $shown[(int) $ref - 1];
         elseif (is_string($ref) && trim($ref) !== '') {
             $t = Str::lower(trim($ref));
             foreach (array_merge($m['focus'] ? [$m['focus']] : [], $shown) as $c) {

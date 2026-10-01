@@ -47,6 +47,15 @@ class HindiText
         'क्रेटा' => 'Creta', 'ब्रेज़ा' => 'Brezza', 'ब्रेजा' => 'Brezza', 'नेक्सॉन' => 'Nexon', 'स्विफ्ट' => 'Swift', 'बलेनो' => 'Baleno', 'वैगनआर' => 'WagonR', 'फॉर्च्यूनर' => 'Fortuner', 'स्कॉर्पियो' => 'Scorpio', 'थार' => 'Thar', 'पंच' => 'Punch', 'इनोवा' => 'Innova', 'वेन्यू' => 'Venue', 'सेल्टोस' => 'Seltos', 'अल्टो' => 'Alto', 'डिजायर' => 'Dzire', 'डिज़ायर' => 'Dzire', 'एक्सयूवी' => 'XUV',
     ];
 
+    /** @var array<string,string> NFC-normalised phrase => English word */
+    private static array $nfcMap = [];
+
+    /** Composed (ड़) and decomposed (ड + nukta) Devanagari must match the same word. */
+    private static function nfc(string $s): string
+    {
+        return class_exists(\Normalizer::class) ? (\Normalizer::normalize($s, \Normalizer::FORM_C) ?: $s) : $s;
+    }
+
     public static function has(string $text): bool
     {
         return (bool) preg_match('/[\x{0900}-\x{097F}]/u', $text);
@@ -56,14 +65,15 @@ class HindiText
     public static function normalize(string $text): string
     {
         if (! self::has($text)) return $text;
-        $t = strtr($text, self::DIGITS);
+        $t = strtr(self::nfc($text), self::DIGITS);
         static $re = null;
         if ($re === null) {
             $keys = array_keys(self::WORDS);
             usort($keys, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
-            $re = '/(?<![\p{L}\p{M}])(?:'.implode('|', array_map(fn ($k) => preg_quote($k, '/'), $keys)).')(?![\p{L}\p{M}])/u';
+            $re = '/(?<![\p{L}\p{M}])(?:'.implode('|', array_map(fn ($k) => preg_quote(self::nfc($k), '/'), $keys)).')(?![\p{L}\p{M}])/u';
+            foreach (self::WORDS as $k => $v) self::$nfcMap[self::nfc($k)] = $v;
         }
-        $t = preg_replace_callback($re, fn ($m) => ' '.self::WORDS[$m[0]].' ', $t);
+        $t = preg_replace_callback($re, fn ($m) => ' '.(self::$nfcMap[$m[0]] ?? '').' ', $t);
         $t = preg_replace('/(\d)\s*से\s*(\d)/u', '$1 to $2', $t);                                                  // "5 से 8 lakh"
         $t = preg_replace('/(\d+(?:\.\d+)?\s*(?:lakh|crore|thousand|k|km))\s+under\b/u', 'under $1', $t);        // "8 lakh under" -> "under 8 lakh"
         return trim(preg_replace('/\s+/u', ' ', $t));
