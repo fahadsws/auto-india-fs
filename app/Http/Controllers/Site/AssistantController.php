@@ -45,7 +45,7 @@ class AssistantController extends Controller
      */
     public function tts(Request $r)
     {
-        $data = $r->validate(['text' => 'required|string|max:600']);
+        $data = $r->validate(['text' => 'required|string|max:900']);
         if (! ElevenLabs::configured()) return response()->noContent();
 
         $text = ElevenLabs::clean($data['text']);

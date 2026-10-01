@@ -8,7 +8,9 @@ use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\Video;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Own-data knowledge base. Uses MySQL FULLTEXT (free, no embeddings/API cost).
@@ -72,6 +74,20 @@ class KnowledgeBase
     public static function siteInfo(): ?KnowledgeChunk
     {
         return KnowledgeChunk::where('type', 'page')->where('ref_id', 1)->first();
+    }
+
+    /**
+     * "Title (link); ..." of the key site pages and the admin-made dynamic pages, so the assistant can point visitors to the right page.
+     * Cached briefly; any page edit is picked up within minutes.
+     */
+    public static function pageIndex(): string
+    {
+        return Cache::remember('asst:pageindex', 300, function () {
+            $fixed = ['Used cars' => route('cars.index'), 'New cars' => route('newcars.index'), 'Car news' => route('news.index'), 'Compare cars' => route('compare.index'), 'Sell your car' => route('sell'), 'Car EMI calculator' => route('emi'), 'Contact' => route('contact'), 'About us' => route('about')];
+            $pages = [];
+            try { $pages = \App\Models\Page::published()->orderByDesc('updated_at')->limit(15)->get(['title', 'slug'])->mapWithKeys(fn ($p) => [Str::limit($p->title, 45, '') => url('/'.$p->slug)])->all(); } catch (\Throwable) {}
+            return collect($fixed + $pages)->map(fn ($u, $t) => "$t ($u)")->implode('; ');
+        });
     }
 
     /** @return \Illuminate\Support\Collection<int, KnowledgeChunk> */

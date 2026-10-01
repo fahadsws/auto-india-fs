@@ -24,16 +24,19 @@
   const views = { load: $('#vLoad'), lead: $('#vLead'), otp: $('#vOtp'), chat: $('#vChat'), fb: $('#vFb') };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false;
-  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0;
+  let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'hi';
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }, del: k => { try { localStorage.removeItem(k) } catch (e) {} } };
   token = store.get('aw_token') || '';
   const savedSpeak = store.get('ag_speak'); speakOn = savedSpeak === null ? ag.dataset.voice === '1' : savedSpeak === '1';
-  let greeted = false;
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
+  // Hindi is the default language of the whole widget; the server tells us when a visitor is chatting in English.
+  const T = { hi: { left: n => n > 0 ? 'आज ' + n + ' संदेश बचे हैं' : 'आज की सीमा पूरी हो गई', resend: s => s > 0 ? s + ' सेकंड में दोबारा भेजें' : 'कोड दोबारा भेजें', conn: 'कनेक्शन में दिक्कत है। कृपया दोबारा कोशिश कीजिए।', wrong: 'कुछ गड़बड़ हो गई। कृपया दोबारा कोशिश कीजिए।', wait: 'कृपया ', sec: ' सेकंड रुकिए…', think: 'सोच रहा हूँ…', speaking: 'बोल रहा हूँ…', listening: 'सुन रहा हूँ… बोलिए', nocatch: 'सुनाई नहीं दिया — बोलते रहिए, या माइक दबाकर रोकिए', mic: 'कृपया ' + name + ' से बात करने के लिए माइक की अनुमति दीजिए।', nosr: 'इस ब्राउज़र में बोलकर बात करना उपलब्ध नहीं है। कृपया Chrome, Edge या Safari इस्तेमाल करें, या लिखकर पूछिए।', hello: 'नमस्ते', hello2: 'नमस्ते!', novoice: 'अभी आवाज़ उपलब्ध नहीं है।', tap: 'आवाज़ चालू करने के लिए माइक या स्पीकर दबाइए', resume: 'बातचीत जारी रखने के लिए माइक दबाइए', code6: '6 अंकों का कोड डालिए।', name: 'कृपया अपना नाम डालिए।', phone: 'सही 10 अंकों का मोबाइल नंबर डालिए।', email: 'सही ईमेल पता डालिए।', src: 'हमारी साइट से' },
+    en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
+  const tr = k => T[lang][k];
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const fmt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  const fmt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
   const down = () => { el.msgs.scrollTop = el.msgs.scrollHeight; };
   const status = t => el.status.textContent = t || '';
   const show = v => { state = v; Object.entries(views).forEach(([k, n]) => n.classList.toggle('show', k === v)); };
@@ -43,7 +46,7 @@
     let data = {}; try { data = await r.json(); } catch (e) {}
     return { ok: r.ok, status: r.status, data };
   };
-  const firstError = d => (d.errors && Object.values(d.errors)[0] && Object.values(d.errors)[0][0]) || d.message || 'Something went wrong. Please try again.';
+  const firstError = d => (d.errors && Object.values(d.errors)[0] && Object.values(d.errors)[0][0]) || d.message || tr('wrong');
 
   /* ---------- open / close ---------- */
   function open() {
@@ -63,6 +66,8 @@
   window.openAssistant = q => { open(); if (q) { const go = () => state === 'chat' ? send(q) : setTimeout(go, 400); go(); } };
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && el.panel.classList.contains('open') && !page) close(); });
   if (el.tip) { setTimeout(() => { if (!ag.classList.contains('is-open')) { el.tip.classList.add('show'); setTimeout(() => el.tip.classList.remove('show'), 6000); } }, 3500); }
+  // Leaving the page must never leave a voice talking in the background.
+  addEventListener('pagehide', () => { try { persist(); stopAudio(); rec && rec.abort(); } catch (e) {} });
 
   /* ---------- boot: who is this visitor? ---------- */
   async function boot() {
@@ -76,18 +81,21 @@
   function enter(d) {
     if (d.token) { token = d.token; store.set('aw_token', token); }
     visitor = (d.name || '').split(' ')[0]; visitorPhone = d.phone || ''; visitorCity = d.city || '';
-    el.hello.textContent = visitor ? 'Hello, ' + visitor + '!' : 'Hello there!';
+    el.hello.textContent = visitor ? tr('hello') + ', ' + visitor + (lang === 'hi' ? ' जी!' : '!') : tr('hello2');
     if (typeof d.left === 'number') leftHint(d.left);
     show('chat'); setTimeout(() => el.text.focus(), 350);
     const st = loadState(), restored = !!(st && st.items && st.items.length);
     if (restored && !items.length) restore(st);
     ready = true;
-    // The spoken greeting plays once per visitor per day - never on re-open, refresh or when moving between pages.
+    // The spoken greeting plays once per visitor per day - not on every re-open or page change. A refreshed page cannot
+    // play audio or listen until the visitor taps once (browser rule), so we say so instead of staying silently mute.
     const today = new Date().toISOString().slice(0, 10);
     if (speakOn && !restored && store.get('aw_greeted') !== today) { store.set('aw_greeted', today); setTimeout(() => speak(ag.dataset.greet), 500); }
     if (!restored) store.set('aw_greeted', today);
+    if (restored && st.voice) { el.mic.classList.add('resume'); status(tr('resume')); setTimeout(() => { if (!voiceMode) status(''); }, 6000); }
   }
-  const leftHint = n => { el.left.textContent = n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached'; };
+  let lastLeft = null;
+  const leftHint = n => { lastLeft = n; el.left.textContent = tr('left')(n); };
 
   /* ---------- step 1: lead form ---------- */
   const fLead = views.lead, eLead = $('#eLead');
@@ -97,11 +105,11 @@
     v.phone = (v.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '');
     $$('.aw-f', fLead).forEach(x => x.classList.remove('bad'));
     const bad = (n, m) => { const i = fLead.elements[n]; i.closest('.aw-f').classList.add('bad'); i.focus(); eLead.textContent = m; return true; };
-    if (!/^[\p{L}\s.'\-]{2,60}$/u.test((v.name || '').trim())) return bad('name', 'Please enter your name.');
-    if (!/^[6-9]\d{9}$/.test(v.phone)) return bad('phone', 'Enter a valid 10-digit Indian mobile number.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.email || '').trim())) return bad('email', 'Enter a valid email address.');
+    if (!/^[\p{L}\p{M}\s.'\-]{2,60}$/u.test((v.name || '').trim())) return bad('name', tr('name'));
+    if (!/^[6-9]\d{9}$/.test(v.phone)) return bad('phone', tr('phone'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.email || '').trim())) return bad('email', tr('email'));
     const btn = $('button[type=submit]', fLead); btn.disabled = true;
-    const r = await api(ag.dataset.lead, v).catch(() => ({ ok: false, data: { message: 'Connection problem. Please try again.' } }));
+    const r = await api(ag.dataset.lead, v).catch(() => ({ ok: false, data: { message: tr('conn') } }));
     btn.disabled = false;
     if (!r.ok) { eLead.textContent = firstError(r.data); return; }
     if (r.data.verified) return enter(r.data);
@@ -117,12 +125,12 @@
     b.addEventListener('paste', e => { const t = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!t) return; e.preventDefault(); t.split('').forEach((c, j) => boxes[j] && (boxes[j].value = c)); (boxes[Math.min(t.length, 5)]).focus(); if (t.length === 6) views.otp.requestSubmit(); });
   });
   let rt = null;
-  function startResend(sec) { clearInterval(rt); resend.disabled = true; const tick = () => { resend.textContent = sec > 0 ? 'Resend code in ' + sec + 's' : 'Resend code'; if (sec-- <= 0) { clearInterval(rt); resend.disabled = false; } }; tick(); rt = setInterval(tick, 1000); }
+  function startResend(sec) { clearInterval(rt); resend.disabled = true; const tick = () => { resend.textContent = tr('resend')(sec); if (sec-- <= 0) { clearInterval(rt); resend.disabled = false; } }; tick(); rt = setInterval(tick, 1000); }
   views.otp.addEventListener('submit', async e => {
     e.preventDefault(); eOtp.textContent = '';
-    const code = boxes.map(b => b.value).join(''); if (code.length < 6) { eOtp.textContent = 'Enter the 6-digit code.'; return; }
+    const code = boxes.map(b => b.value).join(''); if (code.length < 6) { eOtp.textContent = tr('code6'); return; }
     const btn = $('button[type=submit]', views.otp); btn.disabled = true;
-    const r = await api(ag.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: 'Connection problem. Please try again.' } }));
+    const r = await api(ag.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: tr('conn') } }));
     btn.disabled = false;
     if (!r.ok) {
       eOtp.textContent = firstError(r.data); const w = $('#otpBoxes'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
@@ -133,7 +141,7 @@
   resend.addEventListener('click', async () => {
     const v = Object.fromEntries(new FormData(fLead).entries()); v.phone = (v.phone || '').replace(/\D/g, '');
     resend.disabled = true; const r = await api(ag.dataset.lead, v).catch(() => null);
-    if (r && r.ok) { eOtp.textContent = ''; boxes.forEach(b => b.value = ''); boxes[0].focus(); startResend(60); } else { eOtp.textContent = r ? firstError(r.data) : 'Connection problem.'; startResend(r && r.data.retry_after || 30); }
+    if (r && r.ok) { eOtp.textContent = ''; boxes.forEach(b => b.value = ''); boxes[0].focus(); startResend(60); } else { eOtp.textContent = r ? firstError(r.data) : tr('conn'); startResend(r && r.data.retry_after || 30); }
   });
   $('#otpBack').addEventListener('click', () => show('lead'));
 
@@ -141,21 +149,17 @@
   let items = [], visitorPhone = '', visitorCity = '';
   const SKEY = 'aw_state';
   let ready = false;   // do not overwrite the saved conversation before it has been restored
-  const persist = () => { if (!ready) return; try { sessionStorage.setItem(SKEY, JSON.stringify({ open: ag.classList.contains('is-open'), items: items.slice(-40), history: history.slice(-6), sent, rated })); } catch (e) {} };
+  const persist = () => { if (!ready) return; try { sessionStorage.setItem(SKEY, JSON.stringify({ open: ag.classList.contains('is-open'), items: items.slice(-40), history: history.slice(-6), sent, rated, voice: voiceMode, lang })); } catch (e) {} };
   const loadState = () => { try { return JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { return null; } };
   const typing = () => { const d = document.createElement('div'); d.className = 'aw-msg bot aw-typing'; d.innerHTML = '<i></i><i></i><i></i>'; el.msgs.appendChild(d); down(); return d; };
-  const isoDay = n => { const d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 10); };
-  const label = { test_drive: 'Test drive', inspection: 'Inspection' };
 
   function push(it, animate) { items.push(it); render(it, animate); persist(); return it; }
-  function restore(st) { items = st.items || []; history = st.history || []; sent = st.sent || 0; rated = !!st.rated; items.forEach((it, i) => render(it, false, i === items.length - 1)); }
+  function restore(st) { items = (st.items || []).filter(i => ['msg', 'links', 'act'].includes(i.k)); history = st.history || []; sent = st.sent || 0; rated = !!st.rated; if (st.lang) lang = st.lang; items.forEach(it => render(it, false)); }
 
-  function render(it, animate, lastOnly) {
+  function render(it, animate) {
     el.hero.classList.add('gone');
     if (it.k === 'msg') return bubble(it, animate);
     if (it.k === 'links') return cards(it);
-    if (it.k === 'quick') { $$('.aw-quick', el.msgs).forEach(n => n.remove()); if (lastOnly === undefined || lastOnly) return chips(it); return; }
-    if (it.k === 'book') { if (!it.done) return bookCard(it); return; }
     if (it.k === 'act') return actionBtn(it);
   }
 
@@ -172,23 +176,15 @@
   }
   const add = (role, text, extra, animate) => push({ k: 'msg', r: role, t: text, x: extra || '' }, animate);
 
+  /* link cards: just open the car / page (no buttons - the AI takes the enquiry in conversation) */
   function cards(it) {
-    const w = document.createElement('div'); w.className = 'aw-cars';
+    const w = document.createElement('div'); w.className = 'aw-links';
     it.links.forEach(l => {
       const img = l.image ? '<img src="' + esc(l.image) + '" alt="" loading="lazy">' : '';
-      const body = img + '<span>' + esc(l.title) + (l.price ? '<small class="aw-price">' + esc(l.price) + '</small>' : '') + '</span><i class="ti ti-arrow-up-right"></i>';
-      if (l.k && l.id) {
-        const c = document.createElement('div'); c.className = 'aw-car'; c.dataset.k = l.k; c.dataset.id = l.id; c.dataset.t = l.title; c.dataset.p = l.price || ''; c.dataset.u = l.url; c.dataset.img = l.image || '';
-        c.innerHTML = '<a class="aw-car-top" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + body + '</a><div class="aw-car-act"><button type="button" data-a="select">Select</button><button type="button" data-a="test_drive">Test drive</button><button type="button" data-a="inspection">Inspection</button></div>';
-        w.appendChild(c);
-      } else { const a = document.createElement('a'); a.className = 'aw-link'; a.href = l.url; a.innerHTML = body; w.appendChild(a); }
+      const a = document.createElement('a'); a.className = 'aw-link'; a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
+      a.innerHTML = img + '<span>' + esc(l.title) + (l.price ? '<small class="aw-price">' + esc(l.price) + '</small>' : '') + '</span><i class="ti ti-arrow-up-right"></i>';
+      w.appendChild(a);
     });
-    el.msgs.appendChild(w); down();
-  }
-
-  function chips(it) {
-    const w = document.createElement('div'); w.className = 'aw-quick';
-    it.q.forEach(c => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.label; b.dataset.text = c.text; w.appendChild(b); });
     el.msgs.appendChild(w); down();
   }
 
@@ -198,81 +194,32 @@
     el.msgs.appendChild(a); down();
   }
 
-  /* booking card: creates a real test-drive / inspection lead on the server */
-  function bookCard(it) {
-    const car = it.car, who = it.lead || {};
-    const n = document.createElement('div'); n.className = 'aw-book';
-    n.innerHTML = '<b>' + label[it.kind] + ' - ' + esc(car.t) + '</b>'
-      + '<label>Date<input type="date" name="date" min="' + isoDay(0) + '" max="' + isoDay(30) + '" value="' + isoDay(1) + '"></label>'
-      + '<div class="aw-pills" data-n="slot"><label><input type="radio" name="slot" value="morning"><span>Morning<small>9-12</small></span></label><label><input type="radio" name="slot" value="afternoon" checked><span>Afternoon<small>12-4</small></span></label><label><input type="radio" name="slot" value="evening"><span>Evening<small>4-8</small></span></label></div>'
-      + '<div class="aw-pills" data-n="place"><label><input type="radio" name="place" value="showroom" checked><span>At showroom</span></label><label><input type="radio" name="place" value="home"><span>At my address</span></label></div>'
-      + '<input type="text" name="address" maxlength="200" placeholder="Your address" hidden>'
-      + '<input type="text" name="note" maxlength="300" placeholder="Anything we should know? (optional)">'
-      + '<div class="aw-err" role="alert"></div>'
-      + '<button type="button" class="aw-btn"><span>Confirm ' + label[it.kind].toLowerCase() + '</span></button>'
-      + '<small class="aw-fine">We will call ' + (who.phone ? '+91 ' + esc(who.phone) : 'you') + ' to confirm.</small>';
-    const addr = n.querySelector('[name=address]'), err = n.querySelector('.aw-err'), btn = n.querySelector('.aw-btn');
-    n.querySelectorAll('[name=place]').forEach(r => r.addEventListener('change', () => { addr.hidden = n.querySelector('[name=place]:checked').value !== 'home'; if (!addr.hidden) addr.focus(); }));
-    btn.addEventListener('click', async () => {
-      err.textContent = ''; btn.disabled = true;
-      const f = k => (n.querySelector('[name=' + k + ']:checked') || n.querySelector('[name=' + k + ']')).value;
-      const r = await api(ag.dataset.book, { kind: it.kind, k: car.k, id: car.id, date: f('date'), slot: f('slot'), place: f('place'), address: addr.value || null, note: n.querySelector('[name=note]').value || null }).catch(() => ({ ok: false, data: { message: 'Connection problem. Please try again.' } }));
-      btn.disabled = false;
-      if (!r.ok) { err.textContent = firstError(r.data); return; }
-      it.done = true; n.remove();
-      const d = r.data;
-      history.push({ role: 'assistant', content: 'Booked ' + d.kind.toLowerCase() + ' for ' + d.car + ' on ' + d.when + ' (ref ' + d.ref + ')' });
-      add('bot', '✅ ' + d.kind + ' booked for ' + d.car + ' on ' + d.when + '.\nReference: ' + d.ref + '. Our team will call you to confirm.', '', true);
-      push({ k: 'quick', q: [{ label: 'Show similar cars', text: 'show me similar cars' }, { label: 'Book another car', text: 'show me more cars' }] });
-    });
-    el.msgs.appendChild(n); down();
-  }
-
-  /* card buttons: Select / Test drive / Inspection */
-  el.msgs.addEventListener('click', async e => {
-    const b = e.target.closest('.aw-car-act button'); if (!b) return;
-    const c = b.closest('.aw-car'), car = { k: c.dataset.k, id: +c.dataset.id, t: c.dataset.t, p: c.dataset.p, u: c.dataset.u, img: c.dataset.img };
-    $$('.aw-car.sel', el.msgs).forEach(x => x.classList.remove('sel')); c.classList.add('sel');
-    const r = await api(ag.dataset.select, { k: car.k, id: car.id }).catch(() => null);
-    if (!r || !r.ok) { add('err', (r && r.data.message) || 'That car is not available any more.'); return; }
-    const a = b.dataset.a;
-    if (a === 'select') {
-      add('bot', 'Got it - ' + car.t + (car.p ? ' (' + car.p + ')' : '') + ' selected. Would you like a test drive or an inspection?');
-      push({ k: 'quick', q: [{ label: 'Test drive', text: 'Test drive: ' + car.t }, { label: 'Inspection', text: 'Inspection: ' + car.t }, { label: 'Show more cars', text: 'show me more cars' }] });
-    } else {
-      $$('.aw-book', el.msgs).forEach(x => x.remove()); items.forEach(i => { if (i.k === 'book') i.done = true; });
-      push({ k: 'book', kind: a, car, lead: { phone: visitorPhone, city: visitorCity } });
-    }
-  });
-  el.msgs.addEventListener('click', e => { const q = e.target.closest('.aw-quick button'); if (q) { e.target.closest('.aw-quick').remove(); send(q.dataset.text); } });
-
   async function send(text, viaVoice) {
     text = (text || '').trim().slice(0, 300);
     if (!text || busy) return;
-    if (Date.now() < cooldownUntil) { status('Please wait ' + Math.ceil((cooldownUntil - Date.now()) / 1000) + 's…'); return; }
-    busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); $$('.aw-quick', el.msgs).forEach(n => n.remove()); add('user', text); const t = typing(); status(viaVoice ? 'Thinking…' : '');
+    if (Date.now() < cooldownUntil) { status(tr('wait') + Math.ceil((cooldownUntil - Date.now()) / 1000) + tr('sec')); return; }
+    busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); add('user', text); const t = typing(); status(viaVoice ? tr('think') : '');
     let r;
-    try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-3), voice: !!(viaVoice || voiceMode) }); }
-    catch (err) { r = { ok: false, status: 0, data: { message: 'Connection problem. Please try again.' } }; }
+    try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-6), voice: !!(viaVoice || voiceMode) }); }
+    catch (err) { r = { ok: false, status: 0, data: { message: tr('conn') } }; }
     t.remove(); busy = false; ag.classList.remove('busy'); status('');
     if (r.status === 401 && r.data.gate) { store.del('aw_token'); token = ''; show('lead'); return; }
     if (!r.ok) {
       if (r.data.retry_after) cooldownUntil = Date.now() + Math.min(r.data.retry_after, 60) * 1000;
-      add('err', r.data.message || 'Something went wrong. Please try again.');
+      add('err', r.data.message || tr('wrong'));
       if (['daily_messages', 'daily_tokens', 'lifetime_tokens', 'ip_tokens', 'blocked'].includes(r.data.reason)) { leftHint(0); el.text.disabled = true; }
       if (voiceMode) listen(); return;
     }
     const d = r.data; sent++;
+    if (d.lang === 'hi' || d.lang === 'en') { lang = d.lang; if (lastLeft !== null) leftHint(lastLeft); }
     history.push({ role: 'user', content: text }, { role: 'assistant', content: d.answer.slice(0, 300) });
-    add('bot', d.answer, d.source === 'kb' ? 'From our site' : '', true);
+    add('bot', d.answer, d.source === 'kb' ? tr('src') : '', true);
     if (d.links && d.links.length) push({ k: 'links', links: d.links });
     let nav = null;
     (d.actions || []).forEach(a => {
-      if (a.type === 'book') push({ k: 'book', kind: a.kind, car: a.car, lead: a.lead });
-      else if (a.type === 'link') push({ k: 'act', url: a.url, label: a.label });
+      if (a.type === 'link') push({ k: 'act', url: a.url, label: a.label });
       else if (a.type === 'navigate') { push({ k: 'act', url: a.url, label: a.label }); nav = a; }
     });
-    if (d.quick && d.quick.length) push({ k: 'quick', q: d.quick });
     if (typeof d.left === 'number') leftHint(d.left);
     if (speakOn || viaVoice || voiceMode) await speak(d.answer);
     if (voiceMode) listen();
@@ -280,11 +227,21 @@
   }
   el.form.addEventListener('submit', e => { e.preventDefault(); const v = el.text.value.trim(); if (v) { el.text.value = ''; send(v); } });
   $('#agSuggest').addEventListener('click', e => { const b = e.target.closest('button[data-q]'); if (b) send(b.dataset.q); });
+
+  /* New chat: clear the conversation but keep the voice working - the assistant greets again and, if the visitor was
+     talking by voice, goes straight back to listening. (Before, a refresh left the voice silent until the page was reloaded.) */
   $('#agReset').addEventListener('click', () => {
+    const wasVoice = voiceMode;
     stopAll(); history = []; sent = 0; busy = false; items = []; try { sessionStorage.removeItem(SKEY); } catch (e) {}
-    Array.from(el.msgs.children).forEach(n => { if (n !== el.hero) n.remove(); }); el.hero.classList.remove('gone'); el.text.value = ''; el.text.disabled = false;
+    Array.from(el.msgs.children).forEach(n => { if (n !== el.hero) n.remove(); }); el.hero.classList.remove('gone'); el.text.value = ''; el.text.disabled = false; el.mic.classList.remove('resume');
     if (token) api(ag.dataset.reset, {}).catch(() => {});
-    if (state !== 'chat' && token) show('chat'); else if (!token) { show('lead'); }
+    if (state !== 'chat' && token) show('chat'); else if (!token) { show('lead'); return; }
+    ready = true; persist();
+    if (speakOn || wasVoice) {
+      if (wasVoice) voiceMode = true;     // keep the mic state while the greeting is spoken
+      speak(ag.dataset.greet).then(() => { if (voiceMode && state === 'chat' && ag.classList.contains('is-open')) listen(); });
+    }
+    setTimeout(() => el.text.focus(), 200);
   });
 
   /* promo carousel */
@@ -302,53 +259,71 @@
   });
 
   /* ---------- voice out: ElevenLabs via our server (only when the speaker is on), else the browser's own voice ---------- */
-  function stopAudio() { if (audio) { audio.pause(); audio = null; } window.speechSynthesis && speechSynthesis.cancel(); }
+  // Every call to speak() gets a generation number. stopAudio() bumps it and releases whoever is waiting for the clip to end, so a
+  // stopped / replaced / reset voice can never leave the conversation hanging (and a late-arriving clip is thrown away, not played).
+  let gen = 0, release = null;
+  function stopAudio() {
+    gen++;
+    if (audio) { try { audio.pause(); } catch (e) {} audio = null; }
+    window.speechSynthesis && speechSynthesis.cancel();
+    if (release) { const f = release; release = null; f(); }
+  }
   async function speak(text) {
-    stopAudio(); status('Speaking…');
-    const clean = text.replace(/\*\*/g, '').replace(/https?:\/\/\S+/g, '').slice(0, 600);
+    stopAudio(); const my = gen; status(tr('speaking'));
+    const clean = text.replace(/\*\*/g, '').replace(/https?:\/\/\S+/g, '').replace(/[\u{1F300}-\u{1FAFF}☀-➿✅]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 900);
+    const done = () => { if (my === gen) status(''); };
+    if (!clean) return done();
+    const wait = start => new Promise(res => { release = res; start(res); }).then(() => { if (my === gen) release = null; });
     const browser = async () => {
-      if (!window.speechSynthesis) return;
-      await new Promise(res => { const u = new SpeechSynthesisUtterance(clean); u.lang = 'en-IN'; u.rate = 1.02; u.onend = u.onerror = res; speechSynthesis.speak(u); });
+      if (!window.speechSynthesis || my !== gen) return;
+      await wait(res => { const u = new SpeechSynthesisUtterance(clean); u.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; u.rate = 1.0; u.onend = u.onerror = res; speechSynthesis.speak(u); });
     };
     try {
-      const r = await fetch(ag.dataset.tts, { method: 'POST', headers: headers(), body: JSON.stringify({ text: clean }) });
+      const r = await fetch(ag.dataset.tts, { method: 'POST', headers: headers(), credentials: 'same-origin', body: JSON.stringify({ text: clean }) });
+      if (my !== gen) return;                                  // stopped / reset while the clip was being made
       if (r.status === 200) {                                  // the voice saved in Settings
-        const url = URL.createObjectURL(await r.blob()); audio = new Audio(url);
-        await new Promise(res => { audio.onended = audio.onerror = res; audio.play().catch(res); });
-        status(''); return;
+        const blob = await r.blob(); if (my !== gen) return;
+        const url = URL.createObjectURL(blob); const a = new Audio(url); audio = a; let blocked = false;
+        await wait(res => { a.onended = a.onerror = res; a.play().catch(() => { blocked = true; res(); }); });
+        URL.revokeObjectURL(url);
+        if (blocked && my === gen) { status(tr('tap')); setTimeout(() => { if (my === gen) status(''); }, 4000); return; }
+        return done();
       }
-      if (r.status === 204) { await browser(); status(''); return; }   // no ElevenLabs key saved: browser voice is all there is
-      let m = 'Voice is unavailable right now.'; try { m = (await r.json()).message || m; } catch (e) {}
-      if (ag.dataset.fallback === '1') { await browser(); status(''); return; }
-      status(m); setTimeout(() => status(''), 4000); return;    // stay silent rather than sound like a different voice
+      if (r.status === 204) { await browser(); return done(); }   // no ElevenLabs key saved: browser voice is all there is
+      let m = tr('novoice'); try { m = (await r.json()).message || m; } catch (e) {}
+      if (ag.dataset.fallback === '1') { await browser(); return done(); }
+      if (my === gen) { status(m); setTimeout(() => { if (my === gen) status(''); }, 4000); }    // stay silent rather than sound like a different voice
+      return;
     } catch (e) {}
-    if (ag.dataset.voice !== '1' || ag.dataset.fallback === '1') await browser();
-    status('');
+    if (my === gen && (ag.dataset.voice !== '1' || ag.dataset.fallback === '1')) await browser();
+    done();
   }
-  el.speak.addEventListener('click', () => { speakOn = !speakOn; store.set('ag_speak', speakOn ? '1' : '0'); paintSpeak(); if (!speakOn) stopAudio(); });
+  el.speak.addEventListener('click', () => { speakOn = !speakOn; store.set('ag_speak', speakOn ? '1' : '0'); paintSpeak(); if (!speakOn) { stopAudio(); status(''); } });
 
-  /* ---------- voice in: browser speech recognition (free) ---------- */
+  /* ---------- voice in: browser speech recognition (free), Hindi by default ---------- */
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  function stopAll() { voiceMode = false; stopAudio(); try { rec && rec.abort(); } catch (e) {} el.mic.classList.remove('live'); status(''); }
+  function stopAll() { voiceMode = false; stopAudio(); try { rec && rec.abort(); } catch (e) {} rec = null; el.mic.classList.remove('live'); status(''); }
   function listen() {
     if (!SR || !voiceMode) return;
-    rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = true; rec.maxAlternatives = 1;
+    try { rec && rec.abort(); } catch (e) {}
+    const r = rec = new SR(); r.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; r.interimResults = true; r.maxAlternatives = 1;
     let finalText = '';
-    rec.onstart = () => { el.mic.classList.add('live'); status('Listening… speak now'); };
-    rec.onresult = e => { let s = ''; for (const r of e.results) s += r[0].transcript; finalText = s; el.text.value = s; };
-    rec.onerror = e => { if (e.error === 'not-allowed') { alert('Please allow microphone access to talk to ' + name + '.'); stopAll(); } };
-    rec.onend = () => {
+    r.onstart = () => { el.mic.classList.add('live'); status(tr('listening')); };
+    r.onresult = e => { let s = ''; for (const x of e.results) s += x[0].transcript; finalText = s; el.text.value = s; };
+    r.onerror = e => { if (e.error === 'not-allowed') { alert(tr('mic')); stopAll(); } };
+    r.onend = () => {
+      if (rec !== r) return;                                     // an older recogniser that was replaced or stopped
       el.mic.classList.remove('live');
       const v = finalText.trim(); el.text.value = '';
       if (v && voiceMode) send(v, true);
-      else if (voiceMode) { status("Didn't catch that — tap the mic to stop, or keep talking"); setTimeout(listen, 400); }
+      else if (voiceMode) { status(tr('nocatch')); setTimeout(() => { if (voiceMode && !busy) listen(); }, 400); }
     };
-    try { rec.start(); } catch (e) {}
+    try { r.start(); } catch (e) {}
   }
   el.mic.addEventListener('click', () => {
-    if (!SR) { alert('Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.'); return; }
+    if (!SR) { alert(tr('nosr')); return; }
     if (voiceMode) { stopAll(); return; }
-    voiceMode = true; stopAudio(); listen();
+    el.mic.classList.remove('resume'); voiceMode = true; stopAudio(); listen();
   });
 
   /* ---------- page mode + deep links ---------- */

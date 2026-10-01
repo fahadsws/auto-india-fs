@@ -48,8 +48,6 @@ Route::post('/assistant/lead', [Site\AssistantLeadController::class, 'submit'])-
 Route::post('/assistant/verify', [Site\AssistantLeadController::class, 'verify'])->middleware('throttle:assistant-verify')->name('assistant.verify');
 Route::post('/assistant/feedback', [Site\AssistantLeadController::class, 'feedback'])->middleware('throttle:assistant-feedback')->name('assistant.feedback');
 Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware(['throttle:assistant-chat', 'assistant.session'])->name('assistant.chat');
-Route::post('/assistant/select', [Site\AssistantBookingController::class, 'select'])->middleware(['throttle:assistant-select', 'assistant.session'])->name('assistant.select');
-Route::post('/assistant/book', [Site\AssistantBookingController::class, 'book'])->middleware(['throttle:assistant-book', 'assistant.session'])->name('assistant.book');
 Route::post('/assistant/reset', [Site\AssistantBookingController::class, 'reset'])->middleware(['throttle:assistant-reset', 'assistant.session'])->name('assistant.reset');
 Route::post('/assistant/tts', [Site\AssistantController::class, 'tts'])->middleware(['throttle:assistant-tts', 'assistant.session'])->name('assistant.tts');
 
