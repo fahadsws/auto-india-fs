@@ -50,6 +50,7 @@
   <link rel="stylesheet" href="{{ asset('vuexy/vendor/fonts/tabler-icons.full.css') }}">
   <link rel="stylesheet" href="{{ asset('css/home-new.css') }}">
   <link rel="stylesheet" href="{{ asset('css/site-pages.css') }}">
+  @if ($assistantOn)<link rel="stylesheet" href="{{ asset('css/assistant.css') }}">@endif
   @if ($gtm)<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer',@json($gtm));</script>@endif
   @if ($ga4 && ! $gtm)<script async src="https://www.googletagmanager.com/gtag/js?id={{ $ga4 }}"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config',@json($ga4));</script>@endif
   @if (request()->routeIs('home'))
@@ -220,6 +221,7 @@
       <div class="cm-cities" id="cm-cities" hidden></div>
     </div>
   </div>
+  <script src="{{ asset('js/site.js') }}?v={{ @filemtime(public_path('js/site.js')) }}" defer></script>
 </body>
 
 </html>

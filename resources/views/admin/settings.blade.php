@@ -22,7 +22,7 @@
                 @php $name_ = str_replace('.', '__', $key); $val = old($name_, $values[$key]); @endphp
                 <div class="mb-3">
                   @if ($type === 'bool')
-                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="{{ $name_ }}" value="1" id="{{ $name_ }}" @checked((string) $val === '1' || ($val === null && in_array($key, ['assistant.enabled', 'news.auto_publish', 'youtube.auto_attach']) || ($val === null && str_starts_with($key, 'cron.enabled'))))><label class="form-check-label" for="{{ $name_ }}">{{ $label }}</label></div>
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="{{ $name_ }}" value="1" id="{{ $name_ }}" @checked((string) $val === '1' || ($val === null && in_array($key, ['assistant.enabled', 'assistant.require_lead', 'assistant.otp_required', 'news.auto_publish', 'youtube.auto_attach']) || ($val === null && str_starts_with($key, 'cron.enabled'))))><label class="form-check-label" for="{{ $name_ }}">{{ $label }}</label></div>
                   @else
                     <label class="form-label" for="{{ $name_ }}">{{ $label }}</label>
                     @if ($type === 'textarea')<textarea class="form-control" rows="3" name="{{ $name_ }}" id="{{ $name_ }}">{{ $val }}</textarea>

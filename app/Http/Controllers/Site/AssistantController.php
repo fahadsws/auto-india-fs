@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Site;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\Assistant;
+use App\Services\AssistantGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -15,16 +16,28 @@ class AssistantController extends Controller
 
     public function chat(Request $r, Assistant $assistant)
     {
-        abort_unless(Setting::bool('assistant.enabled', true), 404);
-        $data = $r->validate([
-            'message' => 'required|string|max:600',
-            'history' => 'nullable|array|max:12',
+        $d = $r->validate([
+            'message' => 'required|string|max:1000',
+            'history' => 'nullable|array|max:6',
             'history.*.role' => 'in:user,assistant',
             'history.*.content' => 'string|max:1200',
             'voice' => 'nullable|boolean',
         ]);
+        $s = $r->attributes->get('assistant_session');
 
-        return response()->json($assistant->reply($data['message'], $data['history'] ?? [], $r->session()->getId(), (bool) ($data['voice'] ?? false)));
+        $lock = AssistantGuard::lock($s); // one in-flight request per visitor
+        if (! $lock) return response()->json(['message' => 'Still working on your last question…', 'reason' => 'busy'], 429);
+
+        try {
+            $s->refresh();
+            $verdict = AssistantGuard::admit($s, $d['message'], (string) $r->ip());
+            if (! $verdict['allow']) {
+                return response()->json(['message' => $verdict['message'], 'reason' => $verdict['reason'], 'retry_after' => $verdict['retry_after']], 429);
+            }
+            return response()->json($assistant->reply($d['message'], $d['history'] ?? [], $s, (string) $r->ip(), (bool) ($d['voice'] ?? false), $verdict['degraded']));
+        } finally {
+            $lock->release();
+        }
     }
 
     /** ElevenLabs text-to-speech proxy (keeps the API key on the server). 204 tells the browser to use its built-in voice. */
@@ -38,6 +51,10 @@ class AssistantController extends Controller
         $voice = Setting::get('elevenlabs.voice_id', '21m00Tcm4TlvDq8ikWAM');
         $model = Setting::get('elevenlabs.model', 'eleven_flash_v2_5');
         $file = 'tts/'.md5($voice.$model.$text).'.mp3';
+        // Cached clips are free; only new synthesis counts against the visitor's daily character quota.
+        if (! Storage::disk('local')->exists($file) && ! AssistantGuard::admitTts($r->attributes->get('assistant_session'), $text)) {
+            return response()->noContent();
+        }
 
         if (! Storage::disk('local')->exists($file)) {
             $res = Http::withHeaders(['xi-api-key' => $key, 'Accept' => 'audio/mpeg'])->timeout(30)

@@ -43,8 +43,12 @@ Route::get('/llms.txt', [Site\PageController::class, 'llms'])->name('llms');
 Route::get('/feed.xml', [Site\PageController::class, 'feed'])->name('feed');
 
 Route::get('/assistant', [Site\AssistantController::class, 'page'])->name('assistant');
-Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware('throttle:20,1')->name('assistant.chat');
-Route::post('/assistant/tts', [Site\AssistantController::class, 'tts'])->middleware('throttle:15,1')->name('assistant.tts');
+Route::get('/assistant/me', [Site\AssistantLeadController::class, 'me'])->middleware('throttle:30,1')->name('assistant.me');
+Route::post('/assistant/lead', [Site\AssistantLeadController::class, 'submit'])->middleware('throttle:5,1')->name('assistant.lead');
+Route::post('/assistant/verify', [Site\AssistantLeadController::class, 'verify'])->middleware('throttle:10,1')->name('assistant.verify');
+Route::post('/assistant/feedback', [Site\AssistantLeadController::class, 'feedback'])->middleware('throttle:5,1')->name('assistant.feedback');
+Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware(['throttle:30,1', 'assistant.session'])->name('assistant.chat');
+Route::post('/assistant/tts', [Site\AssistantController::class, 'tts'])->middleware(['throttle:15,1', 'assistant.session'])->name('assistant.tts');
 
 /* Cron: hit this URL from any uptime pinger / cPanel cron (every 5-15 min). Each task keeps its own interval. */
 Route::match(['get', 'post'], '/cron/{token}/{task?}', Site\CronController::class)->middleware('throttle:30,1')->name('cron');
@@ -135,6 +139,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('listing-sources', Admin\ListingSourceController::class)->except(['show']);
             Route::post('listing-sources/{listing_source}/run', [Admin\ListingSourceController::class, 'run'])->name('listing-sources.run');
             Route::post('listing-sources-import-url', [Admin\ListingSourceController::class, 'importUrl'])->name('listing-sources.import-url');
+        });
+
+        Route::middleware('permission:assistant.manage')->group(function () {
+            Route::get('assistant', [Admin\AssistantController::class, 'index'])->name('assistant.index');
+            Route::get('assistant/{session}', [Admin\AssistantController::class, 'show'])->name('assistant.show');
+            Route::post('assistant/{session}/block', [Admin\AssistantController::class, 'block'])->name('assistant.block');
+            Route::post('assistant/{session}/reset', [Admin\AssistantController::class, 'reset'])->name('assistant.reset');
         });
 
         Route::middleware('permission:leads.view')->group(function () {

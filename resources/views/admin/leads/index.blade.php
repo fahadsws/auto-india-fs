@@ -13,7 +13,7 @@
 <div class="card dt-wrap">
   <div class="card-header border-bottom"><div class="row g-3 align-items-end">
     <div class="col-6 col-md-3 col-xl"><label class="form-label small mb-1">Status</label><select class="dt-filter" name="status" data-search="off"><option value="">All statuses</option>@foreach ($colors as $s => $c)<option value="{{ $s }}">{{ ucfirst($s) }}</option>@endforeach</select></div>
-    <div class="col-6 col-md-3 col-xl"><label class="form-label small mb-1">Type</label><select class="dt-filter" name="type" data-search="off"><option value="">All types</option>@foreach (['enquiry', 'contact', 'sell'] as $t)<option value="{{ $t }}">{{ ucfirst($t) }}</option>@endforeach</select></div>
+    <div class="col-6 col-md-3 col-xl"><label class="form-label small mb-1">Type</label><select class="dt-filter" name="type" data-search="off"><option value="">All types</option>@foreach (['enquiry', 'contact', 'sell', 'chatbot'] as $t)<option value="{{ $t }}">{{ ucfirst($t) }}</option>@endforeach</select></div>
     <div class="col-6 col-md-3 col-xl"><label class="form-label small mb-1">Assigned to</label><select class="dt-filter" name="assignee"><option value="">Anyone</option><option value="none">Unassigned</option>@foreach ($staff as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach</select></div>
     <div class="col-6 col-md-3 col-xl"><label class="form-label small mb-1">Received between</label><input class="flatpickr-range dt-filter" name="range" placeholder="Pick a date range"></div>
     <div class="col-auto"><button type="button" class="btn btn-label-secondary dt-reset"><i class="ti ti-refresh me-1"></i>Reset</button></div>
