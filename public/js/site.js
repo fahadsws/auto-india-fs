@@ -54,7 +54,7 @@
     stopAll(); el.panel.classList.remove('open'); el.panel.classList.remove('big'); ag.classList.remove('is-open');
     if (state === 'fb') show('chat');
   }
-  el.fab && el.fab.addEventListener('click', open);
+  el.fab && el.fab.addEventListener('click', () => { el.fab.classList.add('splash'); setTimeout(() => el.fab.classList.remove('splash'), 700); open(); });
   $('#agClose') && $('#agClose').addEventListener('click', () => close());
   $('#agExpand') && $('#agExpand').addEventListener('click', e => { const big = el.panel.classList.toggle('big'); e.currentTarget.innerHTML = '<i class="ti ti-arrows-' + (big ? 'minimize' : 'diagonal') + '"></i>'; });
   window.openAssistant = q => { open(); if (q) { const go = () => state === 'chat' ? send(q) : setTimeout(go, 400); go(); } };
@@ -153,11 +153,11 @@
     text = (text || '').trim().slice(0, 300);
     if (!text || busy) return;
     if (Date.now() < cooldownUntil) { status('Please wait ' + Math.ceil((cooldownUntil - Date.now()) / 1000) + 's…'); return; }
-    busy = true; el.form.classList.add('busy'); add('user', text); const t = typing(); status(viaVoice ? 'Thinking…' : '');
+    busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); add('user', text); const t = typing(); status(viaVoice ? 'Thinking…' : '');
     let r;
     try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-4), voice: !!(viaVoice || voiceMode) }); }
     catch (err) { r = { ok: false, status: 0, data: { message: 'Connection problem. Please try again.' } }; }
-    t.remove(); busy = false; status('');
+    t.remove(); busy = false; ag.classList.remove('busy'); status('');
     if (r.status === 401 && r.data.gate) { store.del('aw_token'); token = ''; show('lead'); return; }
     if (!r.ok) {
       if (r.data.retry_after) cooldownUntil = Date.now() + Math.min(r.data.retry_after, 60) * 1000;
