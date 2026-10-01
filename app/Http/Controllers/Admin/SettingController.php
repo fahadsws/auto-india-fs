@@ -29,6 +29,13 @@ class SettingController extends Controller
                 ['site.address', 'Address', 'text', ''],
                 ['leads.notify_emails', 'Sales team emails (comma separated)', 'text', 'New enquiries are emailed here. Configure SMTP in .env (MAIL_*) for real delivery.'],
             ]],
+            'EMI calculator' => ['ti-calculator', [
+                ['emi.default_amount', 'Default loan amount (₹)', 'number', 'Default 1000000.'],
+                ['emi.min_amount', 'Minimum loan amount (₹)', 'number', 'Default 100000.'],
+                ['emi.max_amount', 'Maximum loan amount (₹)', 'number', 'Default 50000000.'],
+                ['emi.default_rate', 'Default interest rate (% p.a.)', 'number', 'Default 10.'],
+                ['emi.default_tenure', 'Default tenure (years)', 'number', 'Default 5.'],
+            ]],
             'AI provider' => ['ti-sparkles', [
                 ['ai.base_url', 'API base URL', 'text', 'Any OpenAI-compatible endpoint. OpenRouter: https://openrouter.ai/api/v1 · Groq: https://api.groq.com/openai/v1 · Gemini: https://generativelanguage.googleapis.com/v1beta/openai'],
                 ['ai.api_key', 'API key', 'secret', 'Stored encrypted. Leave blank to keep the current key.'],

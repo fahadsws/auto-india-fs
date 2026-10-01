@@ -734,3 +734,32 @@ a.btn {
 .fx-side .ad-v{position:sticky;top:16px}
 .ad-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start}
 @media(max-width:900px){.ad-layout{grid-template-columns:1fr}}
+
+/* ---- EMI calculator ---- */
+.emi-wrap{align-items:start}
+.emi{padding:28px}
+.emi-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;align-items:start}
+@media(max-width:760px){.emi-grid{grid-template-columns:1fr;gap:24px}.emi{padding:18px}}
+.emi-f{margin-bottom:22px}
+.emi-f label{display:block;font-weight:700;margin-bottom:12px}
+.emi-f label b{font-weight:800}
+.emi-f input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--line);border-radius:3px;outline:0;margin:10px 0 16px}
+.emi-f input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--red);border:0;cursor:pointer}
+.emi-f input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--red);border:0;cursor:pointer}
+.emi-f input[type=number]{display:block;margin-left:auto;width:110px;height:44px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font:inherit;font-size:15px;background:#fff;color:inherit}
+.emi-f input[type=number]:focus{outline:0;border-color:var(--red)}
+.emi-out p{margin:0 0 14px;font-size:clamp(18px,2.2vw,24px);font-weight:600}
+.emi-out p b{font-weight:800}
+.emi-big{font-size:clamp(22px,2.6vw,28px)!important}
+.emi-chart{margin-top:18px;text-align:center}
+.emi-chart svg{width:min(100%,260px);height:auto}
+.emi-legend{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;justify-content:center;font-size:13px;color:var(--ink2)}
+.emi-legend i{display:inline-block;width:32px;height:10px;margin-right:8px;vertical-align:middle}
+.emi-lead{padding:0;border:0;background:none}
+.emi-lead .fx-lead{margin:0}
+.ln{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.ln a{display:grid;grid-template-columns:92px 1fr;gap:12px;align-items:center;color:inherit;text-decoration:none}
+.ln img{width:92px;height:68px;object-fit:cover;border-radius:8px;background:var(--wash)}
+.ln .t{margin:0 0 4px;font-size:14px;font-weight:700;line-height:1.35}
+.ln a:hover .t{color:var(--red)}
+.ln-more{display:inline-block;margin-top:14px;font-weight:700;color:var(--red);font-size:14px}

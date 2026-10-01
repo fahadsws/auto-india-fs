@@ -63,11 +63,13 @@ class PageController extends Controller
             'name' => 'required|string|max:120',
             'phone' => ['required', 'regex:/^[+0-9 \-]{8,15}$/'],
             'city' => 'required|string|max:80',
+            'emi_context' => 'nullable|string|max:200',
         ]);
         $page = parse_url((string) url()->previous(), PHP_URL_PATH) ?: '/';
+        $emi = $r->filled('emi_context') ? ' EMI calc: '.preg_replace('/[^\w\s.,:₹%@\/()+-]/u', '', $data['emi_context']).'.' : '';
         $lead = Lead::create([
             'name' => $data['name'], 'phone' => $data['phone'], 'type' => 'enquiry', 'ip' => $r->ip(),
-            'message' => "Best-offer request. City: {$data['city']}. From page: {$page}",
+            'message' => "Best-offer request. City: {$data['city']}.{$emi} From page: {$page}",
         ]);
         LeadNotifier::notify($lead);
 
@@ -90,7 +92,7 @@ class PageController extends Controller
 
     public function sitemap()
     {
-        $urls = collect([route('home'), route('news.index'), route('newcars.index'), route('newbikes.index'), route('newtrucks.index'), route('cars.index'), route('videos.index'), route('about'), route('contact'), route('sell')])
+        $urls = collect([route('home'), route('news.index'), route('newcars.index'), route('newbikes.index'), route('newtrucks.index'), route('cars.index'), route('videos.index'), route('about'), route('contact'), route('sell'), route('emi')])
             ->map(fn ($u) => ['loc' => $u, 'lastmod' => now()->toAtomString()])
             ->merge(\App\Models\VehicleModel::published()->latest('updated_at')->take(1000)->get()->map(fn ($c) => ['loc' => $c->url, 'lastmod' => $c->updated_at->toAtomString()]))
             ->merge(Article::published()->latest('published_at')->take(1000)->get()->map(fn ($a) => ['loc' => $a->url, 'lastmod' => $a->updated_at->toAtomString()]))
@@ -120,6 +122,7 @@ class PageController extends Controller
             '- [Car news]('.route('news.index').'): AI-assisted, source-credited news and buying guides',
             '- [Used cars]('.route('cars.index').'): used-car listings with enquiry',
             '- [Videos]('.route('videos.index').'): car review and launch videos',
+            '- [Car loan EMI calculator]('.route('emi').'): free car loan EMI calculator with interest and total payable',
             '- [Sitemap]('.route('sitemap').')', '', '## New car models'];
         foreach (\App\Models\VehicleModel::published()->orderByDesc('updated_at')->take(60)->get() as $c) $lines[] = "- [{$c->full_name}]({$c->url}): {$c->status_label}. {$c->price_label}";
         $lines[] = ''; $lines[] = '## Latest articles';
