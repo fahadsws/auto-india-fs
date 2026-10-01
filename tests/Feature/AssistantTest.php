@@ -248,4 +248,45 @@ class AssistantTest extends TestCase
         $this->assertStringStartsWith('data:audio/mpeg;base64,', $rows['Speech test']['audio']);
         $this->assertSame('ok', $rows['Code version']['status']);
     }
+
+    private function admin(): \App\Models\User
+    {
+        \Spatie\Permission\Models\Role::findOrCreate('Super Admin', 'web');
+        $u = \App\Models\User::factory()->create();
+        $u->assignRole('Super Admin');
+        return $u;
+    }
+
+    public function test_elevenlabs_key_is_saved_as_plain_text_and_shown_in_settings(): void
+    {
+        $this->actingAs($this->admin())->put('/admin/settings', ['elevenlabs__api_key' => '  "sk_test_ABC123"  ', 'ai__api_key' => 'secret-ai-key'])->assertRedirect();
+
+        $row = \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->first();
+        $this->assertSame('sk_test_ABC123', $row->value);          // not encrypted, quotes/spaces stripped
+        $this->assertEquals(0, $row->is_secret);
+        $this->assertSame('sk_test_ABC123', Setting::get('elevenlabs.api_key'));
+
+        $this->get('/admin/settings')->assertOk()->assertSee('value="sk_test_ABC123"', false);
+
+        // other secrets stay encrypted and masked
+        $ai = \Illuminate\Support\Facades\DB::table('settings')->where('key', 'ai.api_key')->first();
+        $this->assertNotSame('secret-ai-key', $ai->value);
+        $this->get('/admin/settings')->assertDontSee('secret-ai-key');
+    }
+
+    public function test_migration_converts_a_readable_legacy_encrypted_key_and_ignores_an_unreadable_one(): void
+    {
+        $migration = require base_path('database/migrations/2026_10_01_000009_plain_elevenlabs_key.php');
+        $db = \Illuminate\Support\Facades\DB::table('settings');
+
+        $db->insert(['key' => 'elevenlabs.api_key', 'value' => \Illuminate\Support\Facades\Crypt::encryptString('sk_legacy'), 'is_secret' => 1]);
+        $migration->up();
+        $row = \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->first();
+        $this->assertSame('sk_legacy', $row->value);
+        $this->assertEquals(0, $row->is_secret);
+
+        \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->update(['value' => 'garbage-not-encrypted', 'is_secret' => 1]);
+        $migration->up();   // must not throw
+        $this->assertSame('garbage-not-encrypted', \Illuminate\Support\Facades\DB::table('settings')->where('key', 'elevenlabs.api_key')->value('value'));
+    }
 }

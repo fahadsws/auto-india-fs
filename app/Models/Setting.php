@@ -14,7 +14,7 @@ class Setting extends Model
     protected $fillable = ['key', 'value', 'is_secret'];
 
     /** Keys whose values are stored encrypted. */
-    public const SECRETS = ['ai.api_key', 'elevenlabs.api_key', 'youtube.api_key', 'cron.token'];
+    public const SECRETS = ['ai.api_key', 'youtube.api_key', 'cron.token'];
 
     private static function all_(): array
     {
