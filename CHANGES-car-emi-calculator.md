@@ -26,3 +26,38 @@ After deploying run: `php artisan migrate` (adds the "Car Loan" header link and 
 
 ## Not verified
 Not run in a browser or via the test suite in the build environment (no MySQL). EMI formula checked: ₹10,00,000 / 10% / 5 yrs → EMI ₹21,247, interest ₹2,74,823, total ₹12,74,823.
+
+---
+
+# Admin "Pages" CRUD — what changed
+
+Branch: `claude/youthful-bohr-5b594n`. Admin: **Pages** (sidebar → Content). Each published page opens at `/{slug}`.
+
+After deploying run: `php artisan migrate` (creates `pages` table and the `pages.manage` permission for Admin and Editor roles; Super Admin always has access).
+
+## New files
+| Path | Purpose |
+|---|---|
+| `database/migrations/2026_10_01_000003_create_pages_table.php` | `pages` table (content, SEO, OG, schema, FAQ, show-lead/ads/news switches, soft deletes) |
+| `database/migrations/2026_10_01_000004_add_pages_permission.php` | `pages.manage` permission |
+| `app/Models/Page.php` | Model, templates, reserved slugs, `published()` scope |
+| `app/Http/Controllers/Admin/PageController.php` | List (DataTable + bulk publish/draft/delete), create/edit/delete, preview |
+| `app/Http/Controllers/Site/CustomPageController.php` | Renders a published page at `/{slug}` |
+| `resources/views/admin/pages/index.blade.php` | Pages list with filters |
+| `resources/views/admin/pages/form.blade.php` | Tabs: Basic Info, Content (TinyMCE), SEO & Schema, FAQ |
+| `resources/views/site/page.blade.php` | Public page: SEO meta, JSON-LD, FAQ, lead form, ads, latest news |
+| `tests/Feature/PagesTest.php` | Feature tests |
+
+## Modified files
+| Path | Change |
+|---|---|
+| `routes/web.php` | `admin/pages` resource routes; catch-all `/{slug}` route registered last |
+| `resources/views/admin/layout.blade.php` | "Pages" sidebar item |
+| `resources/views/site/layout.blade.php` | Page can override canonical, robots, og:title, og:description |
+| `app/Models/HomeSetting.php` | Ad placement "Custom pages" (`page`) |
+| `app/Http/Controllers/Site/PageController.php` | Published pages in `sitemap.xml` and `llms.txt` |
+| `app/Providers/AppServiceProvider.php` | Overrides Laravel's built-in `@context` Blade directive, which was corrupting every JSON-LD `"@context"` key on the site (home, news, new cars, used cars, videos, EMI) |
+| `database/seeders/DatabaseSeeder.php` | `pages.manage` in permission map and Editor role |
+
+## Verified
+`php artisan test` on MariaDB: 11 tests pass (pages CRUD, draft 404, reserved/duplicate slugs, JSON-LD validity, sitemap, EMI page).

@@ -94,6 +94,7 @@ class PageController extends Controller
     {
         $urls = collect([route('home'), route('news.index'), route('newcars.index'), route('newbikes.index'), route('newtrucks.index'), route('cars.index'), route('videos.index'), route('about'), route('contact'), route('sell'), route('emi')])
             ->map(fn ($u) => ['loc' => $u, 'lastmod' => now()->toAtomString()])
+            ->merge(\App\Models\Page::published()->where('robots', 'not like', 'noindex%')->latest('updated_at')->take(1000)->get()->map(fn ($p) => ['loc' => $p->url, 'lastmod' => $p->updated_at->toAtomString()]))
             ->merge(\App\Models\VehicleModel::published()->latest('updated_at')->take(1000)->get()->map(fn ($c) => ['loc' => $c->url, 'lastmod' => $c->updated_at->toAtomString()]))
             ->merge(Article::published()->latest('published_at')->take(1000)->get()->map(fn ($a) => ['loc' => $a->url, 'lastmod' => $a->updated_at->toAtomString()]))
             ->merge(Listing::active()->latest()->take(1000)->get()->map(fn ($l) => ['loc' => $l->url, 'lastmod' => $l->updated_at->toAtomString()]));
@@ -125,6 +126,8 @@ class PageController extends Controller
             '- [Car loan EMI calculator]('.route('emi').'): free car loan EMI calculator with interest and total payable',
             '- [Sitemap]('.route('sitemap').')', '', '## New car models'];
         foreach (\App\Models\VehicleModel::published()->orderByDesc('updated_at')->take(60)->get() as $c) $lines[] = "- [{$c->full_name}]({$c->url}): {$c->status_label}. {$c->price_label}";
+        $pages = \App\Models\Page::published()->where('robots', 'not like', 'noindex%')->orderBy('title')->take(100)->get();
+        if ($pages->isNotEmpty()) { $lines[] = ''; $lines[] = '## Pages'; foreach ($pages as $pg) $lines[] = "- [{$pg->title}]({$pg->url}): ".\Illuminate\Support\Str::limit((string) ($pg->meta_description ?: $pg->excerpt), 140); }
         $lines[] = ''; $lines[] = '## Latest articles';
         foreach (Article::published()->latest('published_at')->take(40)->get() as $a) $lines[] = "- [{$a->title}]({$a->url}): ".\Illuminate\Support\Str::limit((string) $a->excerpt, 140);
 
