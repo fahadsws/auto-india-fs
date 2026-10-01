@@ -705,6 +705,52 @@ class AssistantTest extends TestCase
         $this->assertContains('Jetour T2 Facelift Debuts Globally', collect($g->json('links'))->pluck('title')->all());
     }
 
+    public function test_comparing_two_named_cars_shows_a_card_for_each_and_links_the_real_compare_page(): void
+    {
+        $this->tataCatalog();
+        $this->listing(['title' => 'Hyundai Venue SX Petrol', 'slug' => 'venue-sx', 'brand' => 'Hyundai', 'model' => 'Venue', 'year' => 2023, 'price' => 900000, 'fuel' => 'Petrol', 'city' => 'Nagpur']);
+        $this->listing(['title' => 'Hyundai Venue Diesel', 'slug' => 'venue-d', 'brand' => 'Hyundai', 'model' => 'Venue', 'year' => 2020, 'price' => 775000, 'fuel' => 'Diesel', 'city' => 'Nagpur']);
+        \App\Services\CarMasters::flush(); Cache::flush();
+        $token = $this->verified();
+        $this->aiText = 'Sierra is a new compact SUV from 11.49 lakh, while the used Venue is cheaper at 7.75 lakh.';
+        $this->fakeAi();
+
+        // Devanagari, with the "Syria" mis-hearing, in one sentence
+        $r = $this->chat($token, 'टाटा सीरिया और वेन्यू के बीच में कंपैरिजन शेयर')->assertOk();
+        $titles = collect($r->json('links'))->pluck('title')->all();
+        $this->assertContains('Tata Sierra', $titles);
+        $this->assertTrue(collect($titles)->contains(fn ($t) => str_contains($t, 'Venue')));       // BOTH cars named get a card
+        $this->assertStringContainsString('WANTS TO COMPARE', $this->aiPayload());
+        $this->assertStringContainsString('Tata Sierra', $this->aiPayload());
+        $this->assertStringContainsString('Hyundai Venue', $this->aiPayload());
+        $this->assertStringContainsString('cannot open pages', $this->aiPayload());              // the AI may not pretend to open / check things
+
+        // two NEW models: the real comparison page is offered and opens
+        $c = $this->chat($token, 'Tata Sierra vs Tata Nexon compare')->assertOk();
+        $link = collect($c->json('actions'))->firstWhere('type', 'link');
+        $this->assertNotNull($link);
+        $this->assertStringEndsWith('/compare/sierra-vs-nexon', $link['url']);
+        $this->get($link['url'])->assertOk();
+    }
+
+    public function test_open_detail_page_request_in_devanagari_opens_the_selected_car_without_the_ai(): void
+    {
+        $this->tataCatalog();
+        $token = $this->verified();
+        $this->aiText = 'Tata Sierra ek compact SUV hai.';
+        $this->fakeAi();
+        $this->chat($token, 'mujhe Tata Sierra ke bare mein aur janna tha')->assertOk();
+        $calls = count(Http::recorded());
+        $r = $this->chat($token, 'इसकी डिटेल पेज ओपन करना')->assertOk();
+        $this->assertSame('navigate', $r->json('actions.0.type'));
+        $this->assertStringEndsWith('/new-cars/sierra', $r->json('actions.0.url'));
+        $this->assertSame($calls, count(Http::recorded()));                                          // no AI, so no made-up "I will check"
+
+        // another page request is not hijacked into a car page
+        $o = $this->chat($token, 'contact page kholo')->assertOk();
+        $this->assertNotSame('navigate', $o->json('actions.0.type'));
+    }
+
     public function test_dynamic_page_content_answers_questions_even_without_site_words(): void
     {
         \App\Models\Page::create(['title' => 'Exchange bonus scheme', 'slug' => 'exchange-bonus', 'status' => 'published', 'body' => '<p>Bring your old vehicle and receive an additional bonus voucher worth 25000 rupees at purchase.</p>']);

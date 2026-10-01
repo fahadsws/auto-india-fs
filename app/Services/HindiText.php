@@ -36,6 +36,7 @@ class HindiText
         'पता' => 'address', 'संपर्क' => 'contact', 'नंबर' => 'phone', 'समय' => 'timings', 'सेवाएं' => 'services', 'ऑफर' => 'offers', 'वारंटी' => 'warranty', 'बीमा' => 'insurance', 'शोरूम' => 'showroom', 'डीलर' => 'dealer',
         'पेज' => 'page', 'ले जाओ' => 'le jao', 'ले चलो' => 'le chalo', 'खोलो' => 'kholo', 'खोलिए' => 'kholo', 'डिटेल्स' => 'details', 'डिटेल' => 'detail', 'लिंक' => 'link', 'इसके' => 'iske', 'इसकी' => 'iski', 'इसका' => 'iska',
         'इनफार्मेशन' => 'information', 'इन्फॉर्मेशन' => 'information', 'इन्फोर्मेशन' => 'information', 'जानकारी' => 'information', 'शेयर' => 'share',
+        'ओपन' => 'open', 'ओपेन' => 'open', 'कंपैरिजन' => 'comparison', 'कम्पैरिजन' => 'comparison', 'कंपेरिजन' => 'comparison', 'कम्पेरिज़न' => 'comparison', 'बनाम' => 'vs', 'फर्क' => 'difference', 'अंतर' => 'difference', 'वेन्यू' => 'Venue', 'सिएरा' => 'Sierra', 'हैरियर' => 'Harrier',
         'समाचार' => 'news', 'ख़बर' => 'news', 'खबर' => 'news', 'वीडियो' => 'video', 'तुलना' => 'compare', 'ब्रोशर' => 'brochure',
         // cities
         'दिल्ली' => 'Delhi', 'मुंबई' => 'Mumbai', 'मुम्बई' => 'Mumbai', 'बेंगलुरु' => 'Bengaluru', 'बैंगलोर' => 'Bengaluru', 'बेंगलूरु' => 'Bengaluru', 'चेन्नई' => 'Chennai', 'हैदराबाद' => 'Hyderabad',

@@ -190,6 +190,41 @@ class SiteData
         return [$norm, $fixes];
     }
 
+    /**
+     * The cars the visitor NAMED ("Sierra", "Sierra vs Venue", "Tata Nexon price"), straight from the database: the new catalog first,
+     * otherwise our used stock. These drive the data, the cards and the "selected car" - not whatever a text search happens to return.
+     * @return array<int, \App\Models\VehicleModel|\App\Models\Listing>
+     */
+    public static function mentionedCars(string $norm, int $max = 3): array
+    {
+        $set = Cache::remember('asst:alltokens', 600, fn () => VehicleModel::published()->pluck('name')->merge(Listing::active()->pluck('model'))
+            ->flatMap(fn ($n) => preg_split('/[^\p{L}\p{N}]+/u', Str::lower((string) $n), -1, PREG_SPLIT_NO_EMPTY))
+            ->filter(fn ($t) => mb_strlen($t) >= 3 && ! ctype_digit($t) && ! in_array($t, self::NAME_SKIP, true))->unique()->flip()->all());
+        $low = Str::lower($norm);
+        $brandPresent = collect(self::brands())->contains(fn ($b) => (bool) preg_match('/(?<![\p{L}\p{N}])'.preg_quote(Str::lower(Str::before($b, ' ')), '/').'(?![\p{L}\p{N}])/u', $low));
+        $weak = ['city', 'range', 'space', 'star', 'point', 'sport', 'tour', 'one', 'zero', 'pro', 'max', 'plus'];     // everyday words that are also model names: only with a brand next to them
+        $out = [];
+        foreach (array_unique(preg_split('/[^\p{L}\p{N}]+/u', $low, -1, PREG_SPLIT_NO_EMPTY)) as $t) {
+            if (! isset($set[$t]) || in_array($t, self::NAME_SKIP, true)) continue;
+            if ((in_array($t, $weak, true) || mb_strlen($t) < 4) && ! $brandPresent) continue;
+            $new = VehicleModel::published()->where('name', 'like', "%$t%")->orderByDesc('latest_event_at')->first();
+            $found = $new ? [$new] : Listing::active()->where(fn ($q) => $q->where('model', 'like', "%$t%")->orWhere('title', 'like', "%$t%"))->latest('updated_at')->limit(2)->get()->all();
+            foreach ($found as $car) $out[get_class($car).':'.$car->id] = $car;
+            if (count($out) >= $max) break;
+        }
+        return array_slice(array_values($out), 0, $max);
+    }
+
+    /** One short factual block per car for the AI (new model: status, price, body, fuel, highlights; used car: its full line). */
+    public static function carContext($car): string
+    {
+        if ($car instanceof Listing) return 'USED: '.self::usedLine($car);
+        $used = Listing::active()->where('vehicle_model_id', $car->id)->orderBy('price')->get();
+        $k = $car->toKnowledge();
+        return 'NEW MODEL: '.$car->full_name.' ('.$car->status_label.') - from '.$car->price_label.($car->body_type ? ', '.$car->body_type : '').($car->fuel_types ? ', fuel '.implode('/', $car->fuel_types) : '')
+            .'. '.Str::limit((string) ($k['content'] ?? ''), 900, '…').($used->isNotEmpty() ? ' | Used '.$car->name.' in our stock: '.$used->count().', from '.$used->first()->price_label : '');
+    }
+
     private const CONTENT_STOP = ['news', 'latest', 'new', 'newest', 'recent', 'today', 'khabar', 'khabrein', 'samachar', 'article', 'articles', 'video', 'videos', 'review', 'reviews', 'show', 'tell', 'about', 'dikhao', 'batao', 'bataiye', 'dikha', 'cars', 'car', 'gaadi', 'gadi', 'mujhe', 'muje', 'kuch', 'koi', 'abhi', 'headlines', 'from', 'your', 'site', 'website', 'give', 'want', 'need', 'please', 'any', 'the', 'and', 'for', 'with', 'what', 'whats', 'have', 'you'];
 
     public static function newsIntent(string $t): bool

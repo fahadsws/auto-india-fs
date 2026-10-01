@@ -162,3 +162,10 @@ Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan o
 - **"Take me to its page"** ("iske page par le jao", "open the page", "link do") opens the selected car's detail page (browser redirects, card shown, no AI call). Asking for *details/information* is answered by the AI, not treated as navigation.
 - **News honesty.** If the visitor names something with no matching article, the assistant says so and shows no unrelated "latest" stories; only a general "latest news" shows the newest.
 - Asking about a car already selected no longer gets a canned "Nice pick"; the AI answers from the data.
+
+## Named cars drive the data; compare; "open page" in Hindi
+- **The cars the visitor names are looked up directly in the database** (new catalog first, else used stock): "Sierra", "Sierra vs Venue", "Tata Nexon price". Their facts are the AI's data and each gets a card (real price). One car -> it becomes the selected car; several -> they become the numbered list. A named car beats a brand-wide list (so "Tata Sierra price" no longer lists all Tata cars).
+- **Compare.** Two or more named cars are compared from our data, one card each. When both are new models, "Open the full comparison" links the real `/compare/a-vs-b` page. Devanagari words like कंपैरिजन / बनाम are understood.
+- **"इसकी डिटेल पेज ओपन करना" / "iska page kholo"** opens the selected (or named) car's page. Other pages ("contact page kholo") are not hijacked.
+- The AI is told it cannot open pages or look anything up, so it no longer says "main abhi check karke batata hoon".
+- If the assistant sounds too chatty or uses a pet phrase ("Arre Rahul bhai"), check **Settings -> Assistant -> Extra personality / business rules**; that text is added to every prompt.
