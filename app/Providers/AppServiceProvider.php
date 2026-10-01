@@ -20,6 +20,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // One bucket PER endpoint (inline "throttle:N,1" shares a single counter per IP across all routes, which made
+        // chatting a few times lock out booking). Visitor-bound endpoints are keyed by assistant session + IP.
+        foreach (['me' => 60, 'lead' => 5, 'verify' => 10, 'feedback' => 5, 'chat' => 30, 'select' => 30, 'book' => 8, 'reset' => 20, 'tts' => 20] as $name => $perMinute) {
+            \Illuminate\Support\Facades\RateLimiter::for('assistant-'.$name, function (\Illuminate\Http\Request $r) use ($name, $perMinute) {
+                $key = $name.'|'.$r->ip();
+                if (in_array($name, ['chat', 'select', 'book', 'reset', 'tts'], true)) $key .= '|'.substr((string) $r->header('X-Assistant-Token'), 0, 12);
+                return \Illuminate\Cache\RateLimiting\Limit::perMinute($perMinute)->by($key);
+            });
+        }
+
         Paginator::useBootstrapFive();
 
         // Laravel 12.x ships a built-in @context directive that would swallow the "@context" key of our JSON-LD

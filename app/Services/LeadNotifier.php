@@ -15,12 +15,13 @@ class LeadNotifier
         if (! $to) return;
 
         $lead->loadMissing('listing');
-        $body = "New {$lead->type} lead on ".config('app.name')."\n\n"
+        $type = str_replace('_', ' ', $lead->type);
+        $body = "New {$type} lead on ".config('app.name')."\n\n"
             ."Name: {$lead->name}\nPhone: {$lead->phone}\nEmail: {$lead->email}\n"
             .($lead->listing ? "Car: {$lead->listing->title} ({$lead->listing->url})\n" : '')
             ."Message: {$lead->message}\n\nOpen in admin: ".route('admin.leads.show', $lead);
         try {
-            Mail::raw($body, fn ($m) => $m->to($to)->subject("New {$lead->type} lead: {$lead->name}"));
+            Mail::raw($body, fn ($m) => $m->to($to)->subject("New {$type} lead: {$lead->name}"));
         } catch (\Throwable $e) {
             Log::warning('Lead email failed: '.$e->getMessage());
         }

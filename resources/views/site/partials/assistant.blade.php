@@ -23,7 +23,7 @@
 @endphp
 <div class="aw {{ $mode === 'page' ? 'aw-page' : '' }}" id="ag" data-mode="{{ $mode }}" data-name="{{ $asstName }}" data-voice="{{ $voiceOn ? 1 : 0 }}" data-fallback="{{ \App\Models\Setting::bool('elevenlabs.browser_fallback', false) ? 1 : 0 }}" data-greet="{{ $voiceGreet }}"
      data-chat="{{ route('assistant.chat') }}" data-tts="{{ route('assistant.tts') }}" data-me="{{ route('assistant.me') }}"
-     data-lead="{{ route('assistant.lead') }}" data-verify="{{ route('assistant.verify') }}" data-feedback="{{ route('assistant.feedback') }}">
+     data-lead="{{ route('assistant.lead') }}" data-select="{{ route('assistant.select') }}" data-book="{{ route('assistant.book') }}" data-reset="{{ route('assistant.reset') }}" data-verify="{{ route('assistant.verify') }}" data-feedback="{{ route('assistant.feedback') }}">
   @if ($mode === 'float')
     <button class="aw-fab" id="agFab" type="button" aria-label="Chat with {{ $asstName }}">
       <span class="aw-rip"></span><span class="aw-rip r2"></span><span class="aw-rip r3"></span>
