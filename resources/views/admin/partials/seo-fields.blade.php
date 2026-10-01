@@ -4,12 +4,13 @@
 @php
   $faq = old('faq', $m->faq ?? []);
   $slugInput = $slugInput ?? null; $titleInput = $titleInput ?? null;
+  $schemaTypes = $schemaTypes ?? \App\Support\SeoRules::SCHEMA_TYPES; $titleMax = $titleMax ?? 120;
 @endphp
       {{-- SEO & Schema --}}
       <div class="tab-pane fade {{ $tab === 'seo' ? 'show active' : '' }}" id="t-seo">
         <div class="row g-4">
           <div class="col-lg-7">
-            <div class="mb-3"><label class="form-label">Meta title <small class="text-muted" id="cMt"></small></label><input class="form-control" name="meta_title" id="f_mt" maxlength="120" value="{{ old('meta_title', $m->meta_title) }}"><small class="text-muted">Aim for 50–60 characters. Falls back to the page title.</small></div>
+            <div class="mb-3"><label class="form-label">Meta title <small class="text-muted" id="cMt"></small></label><input class="form-control" name="meta_title" id="f_mt" maxlength="{{ $titleMax }}" value="{{ old('meta_title', $m->meta_title) }}"><small class="text-muted">Aim for 50–60 characters. Falls back to the page title.</small></div>
             <div class="mb-3"><label class="form-label">Meta description <small class="text-muted" id="cMd"></small></label><textarea class="form-control" name="meta_description" id="f_md" rows="3" maxlength="320">{{ old('meta_description', $m->meta_description) }}</textarea><small class="text-muted">Aim for 120–160 characters. Falls back to the excerpt.</small></div>
             <div class="mb-3"><label class="form-label">Meta keywords</label><input class="form-control" name="meta_keywords" value="{{ old('meta_keywords', $m->meta_keywords) }}" placeholder="car loan, emi, ..."></div>
             <div class="row g-3 mb-3">
@@ -23,7 +24,7 @@
               <div class="col-12"><label class="form-label">OG description</label><textarea class="form-control" name="og_description" rows="2" maxlength="320">{{ old('og_description', $m->og_description) }}</textarea></div>
             </div>
             <h6 class="mt-4">Schema (structured data)</h6>
-            <div class="mb-3"><label class="form-label">Schema type</label><select class="form-select" name="schema_type">@foreach (\App\Support\SeoRules::SCHEMA_TYPES as $k => $v)<option value="{{ $k }}" @selected(old('schema_type', $m->schema_type) === $k)>{{ $v }}</option>@endforeach</select>
+            <div class="mb-3"><label class="form-label">Schema type</label><select class="form-select" name="schema_type">@foreach ($schemaTypes as $k => $v)<option value="{{ $k }}" @selected(old('schema_type', $m->schema_type) === $k)>{{ $v }}</option>@endforeach</select>
               <small class="text-muted">FAQ entries are always added as FAQPage schema. A breadcrumb is added automatically.</small></div>
             <div class="mb-3"><label class="form-label">Custom JSON-LD (optional)</label><textarea class="form-control font-monospace" name="schema_json" rows="6" placeholder='{"@@context":"https://schema.org","@@type":"..."}'>{{ old('schema_json', $m->schema_json) }}</textarea><small class="text-muted">Paste a full JSON-LD object. Must be valid JSON.</small></div>
           </div>
@@ -75,6 +76,10 @@
       + '<input class="form-control mb-2" name="faq[' + n + '][q]" maxlength="300" placeholder="Question"><textarea class="form-control" name="faq[' + n + '][a]" rows="3" maxlength="3000" placeholder="Answer"></textarea>';
     n++; list.appendChild(d);
   });
+  window.seoSetFaq = function (items) {
+    list.innerHTML = '';
+    (items || []).forEach(f => { $('faqAdd').click(); const r = list.lastElementChild; r.querySelector('input').value = f.q || ''; r.querySelector('textarea').value = f.a || ''; });
+  };
   list.addEventListener('click', e => { const b = e.target.closest('.faq-del'); if (b) b.closest('.faq-row').remove(); });
 })();
 </script>

@@ -96,7 +96,7 @@ class PageController extends Controller
             ->map(fn ($u) => ['loc' => $u, 'lastmod' => now()->toAtomString()])
             ->merge(\App\Models\Page::published()->where('robots', 'not like', 'noindex%')->latest('updated_at')->take(1000)->get()->map(fn ($p) => ['loc' => $p->url, 'lastmod' => $p->updated_at->toAtomString()]))
             ->merge(\App\Models\VehicleModel::published()->latest('updated_at')->take(1000)->get()->map(fn ($c) => ['loc' => $c->url, 'lastmod' => $c->updated_at->toAtomString()]))
-            ->merge(Article::published()->latest('published_at')->take(1000)->get()->map(fn ($a) => ['loc' => $a->url, 'lastmod' => $a->updated_at->toAtomString()]))
+            ->merge(Article::published()->where('robots', 'not like', 'noindex%')->latest('published_at')->take(1000)->get()->map(fn ($a) => ['loc' => $a->url, 'lastmod' => $a->updated_at->toAtomString()]))
             ->merge(Listing::active()->latest()->take(1000)->get()->map(fn ($l) => ['loc' => $l->url, 'lastmod' => $l->updated_at->toAtomString()]));
 
         return response()->view('site.sitemap', ['urls' => $urls])->header('Content-Type', 'application/xml');
@@ -130,7 +130,7 @@ class PageController extends Controller
         $pages = \App\Models\Page::published()->where('robots', 'not like', 'noindex%')->orderBy('title')->take(100)->get();
         if ($pages->isNotEmpty()) { $lines[] = ''; $lines[] = '## Pages'; foreach ($pages as $pg) $lines[] = "- [{$pg->title}]({$pg->url}): ".\Illuminate\Support\Str::limit((string) ($pg->meta_description ?: $pg->excerpt), 140); }
         $lines[] = ''; $lines[] = '## Latest articles';
-        foreach (Article::published()->latest('published_at')->take(40)->get() as $a) $lines[] = "- [{$a->title}]({$a->url}): ".\Illuminate\Support\Str::limit((string) $a->excerpt, 140);
+        foreach (Article::published()->where('robots', 'not like', 'noindex%')->latest('published_at')->take(40)->get() as $a) $lines[] = "- [{$a->title}]({$a->url}): ".\Illuminate\Support\Str::limit((string) $a->excerpt, 140);
 
         return response(implode("\n", $lines)."\n")->header('Content-Type', 'text/plain; charset=utf-8');
     }

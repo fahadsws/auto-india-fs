@@ -4,7 +4,7 @@
 @if ($hasBulk)
   @php
     $icons = ['enable' => 'ti-circle-check', 'publish' => 'ti-world-upload', 'draft' => 'ti-file-pencil', 'category' => 'ti-tag', 'delete' => 'ti-trash', 'activate' => 'ti-circle-check', 'pause' => 'ti-player-pause',
-              'hide' => 'ti-eye-off', 'show' => 'ti-eye', 'sold' => 'ti-currency-rupee', 'status' => 'ti-flag', 'assign' => 'ti-user-plus', 'disable' => 'ti-circle-x', 'role' => 'ti-shield-check', 'refresh' => 'ti-sparkles'];
+              'hide' => 'ti-eye-off', 'show' => 'ti-eye', 'sold' => 'ti-currency-rupee', 'status' => 'ti-flag', 'assign' => 'ti-user-plus', 'disable' => 'ti-circle-x', 'role' => 'ti-shield-check', 'refresh' => 'ti-sparkles', 'ai_seo' => 'ti-sparkles'];
   @endphp
   <div class="dt-bulkbar d-none px-4 py-2 border-bottom" data-url="{{ $bulkUrl }}">
     <div class="d-flex flex-wrap align-items-center gap-3">

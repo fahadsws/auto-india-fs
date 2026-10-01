@@ -47,6 +47,8 @@ class SettingController extends Controller
                 ['seo.bing_verification', 'Bing Webmaster verification code', 'text', ''],
                 ['seo.ga4_id', 'Google Analytics 4 ID', 'text', 'e.g. G-XXXXXXXXXX'],
                 ['seo.gtm_id', 'Google Tag Manager ID', 'text', 'e.g. GTM-XXXXXXX'],
+                ['seo.article_default_robots', 'New automated/imported articles: robots', 'text', 'index,follow (default), noindex,follow or noindex,nofollow. Use noindex,follow to keep imports out of Google until reviewed.'],
+                ['seo.article_default_schema', 'New automated/imported articles: schema type', 'text', 'NewsArticle (default), Article, BlogPosting, Review or None.'],
                 ['seo.robots_extra', 'Extra robots.txt lines', 'textarea', 'Appended to the generated robots.txt.'],
             ]],
             'AI provider' => ['ti-sparkles', [

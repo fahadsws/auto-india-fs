@@ -78,6 +78,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('articles/{article}', [Admin\ArticleController::class, 'update'])->name('articles.update');
         Route::delete('articles/{article}', [Admin\ArticleController::class, 'destroy'])->name('articles.destroy');
         Route::post('articles/import-url', [Admin\ArticleController::class, 'importUrl'])->middleware('permission:articles.create')->name('articles.import-url');
+        Route::post('articles/{article}/ai-seo', [Admin\ArticleController::class, 'aiSeo'])->name('articles.ai-seo');
         Route::post('articles/ai-draft', [Admin\ArticleController::class, 'aiDraft'])->middleware('permission:articles.create')->name('articles.ai');
 
         Route::middleware('permission:pages.manage')->group(function () {

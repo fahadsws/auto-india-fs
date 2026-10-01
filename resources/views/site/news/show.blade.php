@@ -1,12 +1,18 @@
 @extends('site.layout')
 @section('title', ($article->meta_title ?: $article->title).' | '.\App\Models\Setting::get('site.name'))
 @section('description', $article->meta_description ?: $article->excerpt)
-@section('image', $article->image_url)
+@section('image', $article->og_image ?: $article->image_url)
+@if ($article->canonical_url)@section('canonical', $article->canonical_url)@endif
+@if ($article->robots && $article->robots !== 'index,follow')@section('robots', $article->robots)@endif
+@if ($article->og_title)@section('og_title', $article->og_title)@endif
+@if ($article->og_description)@section('og_description', $article->og_description)@endif
+@if ($article->meta_keywords)@section('keywords', $article->meta_keywords)@endif
 @section('og_type', 'article')
 
 @push('head')
-<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'NewsArticle', 'headline' => $article->title, 'image' => [$article->image_url], 'datePublished' => $article->published_at?->toIso8601String(), 'dateModified' => $article->updated_at->toIso8601String(), 'author' => ['@type' => 'Organization', 'name' => $article->author?->name ?? \App\Models\Setting::get('site.name')], 'publisher' => ['@type' => 'Organization', 'name' => \App\Models\Setting::get('site.name')], 'mainEntityOfPage' => $article->url, 'keywords' => $article->tags ? implode(', ', $article->tags) : null, 'isAccessibleForFree' => true], JSON_UNESCAPED_SLASHES) !!}</script>
+@if (($article->schema_type ?? 'NewsArticle') !== 'None')<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => $article->schema_type ?: 'NewsArticle', 'headline' => $article->title, 'image' => [$article->image_url], 'datePublished' => $article->published_at?->toIso8601String(), 'dateModified' => $article->updated_at->toIso8601String(), 'author' => ['@type' => 'Organization', 'name' => $article->author?->name ?? \App\Models\Setting::get('site.name')], 'publisher' => ['@type' => 'Organization', 'name' => \App\Models\Setting::get('site.name')], 'mainEntityOfPage' => $article->url, 'keywords' => $article->tags ? implode(', ', $article->tags) : null, 'isAccessibleForFree' => true], JSON_UNESCAPED_SLASHES) !!}</script>@endif
 @if ($article->faq)<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => collect($article->faq)->map(fn ($f) => ['@type' => 'Question', 'name' => $f['q'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f['a']]])->values()->all()], JSON_UNESCAPED_SLASHES) !!}</script>@endif
+@if (filled($article->schema_json) && ($custom = json_decode($article->schema_json, true)) !== null)<script type="application/ld+json">{!! json_encode($custom, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>@endif
 @endpush
 
 @section('content')
