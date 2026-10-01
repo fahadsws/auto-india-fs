@@ -68,3 +68,10 @@ Browser speech input is free. ElevenLabs speaks replies only when the visitor tu
 - Form buttons follow the feedback reference: solid black full-width buttons, rounded-square tool and star buttons, light grey radio rows with a small hollow circle, light grey inputs, and a soft white-to-grey panel.
 - The chat box is shorter (620 px instead of 740 px, 390 px wide; expanded view is capped at 760 px). The greeting, promo strip and form spacing were tightened so the lead form and the chat input fit without clipping. Mobile still opens full screen.
 - Files: `public/css/assistant.css`, `resources/views/site/partials/assistant.blade.php`.
+
+## Design update: liquid water bubble
+- The orb is now a glass bubble with real "water" inside: two layered waves that roll, a surface that sloshes and tilts, a violet pool at the lower right, rising micro-bubbles, a light streak that sweeps across the glass, and a gentle water-balloon squish.
+- Twinkling stars float around the bubble, and the sparkle in the centre twinkles.
+- The floating button sends out soft, wobbly water ripples, jellies when hovered, and splashes when clicked.
+- While the assistant is thinking, the water stirs faster and rises.
+- Files: new `resources/views/site/partials/bubble.blade.php` (shared by the button, greeting, and form steps), `public/css/assistant.css`, `public/js/site.js` (thinking and splash hooks).
