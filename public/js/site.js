@@ -27,7 +27,8 @@
   let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0;
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }, del: k => { try { localStorage.removeItem(k) } catch (e) {} } };
   token = store.get('aw_token') || '';
-  speakOn = store.get('ag_speak') === '1';
+  const savedSpeak = store.get('ag_speak'); speakOn = savedSpeak === null ? ag.dataset.voice === '1' : savedSpeak === '1';
+  let greeted = false;
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
 
@@ -76,6 +77,7 @@
     el.hello.textContent = visitor ? 'Hello, ' + visitor + '!' : 'Hello there!';
     if (typeof d.left === 'number') leftHint(d.left);
     show('chat'); setTimeout(() => el.text.focus(), 350);
+    if (speakOn && !greeted) { greeted = true; setTimeout(() => speak(ag.dataset.greet), 500); }
   }
   const leftHint = n => { el.left.textContent = n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached'; };
 
@@ -167,7 +169,7 @@
     }
     const d = r.data; sent++;
     history.push({ role: 'user', content: text }, { role: 'assistant', content: d.answer.slice(0, 400) });
-    add('bot', d.answer, d.source === 'kb' ? 'From our site' : d.source === 'web' ? 'General knowledge — not from our site' : '', true);
+    add('bot', d.answer, d.source === 'kb' ? 'From our site' : '', true);
     addLinks(d.links); if (typeof d.left === 'number') leftHint(d.left);
     if (speakOn || viaVoice || voiceMode) await speak(d.answer);
     if (voiceMode) listen();
@@ -198,17 +200,23 @@
   async function speak(text) {
     stopAudio(); status('Speaking…');
     const clean = text.replace(/\*\*/g, '').replace(/https?:\/\/\S+/g, '').slice(0, 600);
+    const browser = async () => {
+      if (!window.speechSynthesis) return;
+      await new Promise(res => { const u = new SpeechSynthesisUtterance(clean); u.lang = 'en-IN'; u.rate = 1.02; u.onend = u.onerror = res; speechSynthesis.speak(u); });
+    };
     try {
       const r = await fetch(ag.dataset.tts, { method: 'POST', headers: headers(), body: JSON.stringify({ text: clean }) });
-      if (r.status === 200) {
+      if (r.status === 200) {                                  // the voice saved in Settings
         const url = URL.createObjectURL(await r.blob()); audio = new Audio(url);
         await new Promise(res => { audio.onended = audio.onerror = res; audio.play().catch(res); });
         status(''); return;
       }
+      if (r.status === 204) { await browser(); status(''); return; }   // no ElevenLabs key saved: browser voice is all there is
+      let m = 'Voice is unavailable right now.'; try { m = (await r.json()).message || m; } catch (e) {}
+      if (ag.dataset.fallback === '1') { await browser(); status(''); return; }
+      status(m); setTimeout(() => status(''), 4000); return;    // stay silent rather than sound like a different voice
     } catch (e) {}
-    if (window.speechSynthesis) {
-      await new Promise(res => { const u = new SpeechSynthesisUtterance(clean); u.lang = 'en-IN'; u.rate = 1.02; u.onend = u.onerror = res; speechSynthesis.speak(u); });
-    }
+    if (ag.dataset.voice !== '1' || ag.dataset.fallback === '1') await browser();
     status('');
   }
   el.speak.addEventListener('click', () => { speakOn = !speakOn; store.set('ag_speak', speakOn ? '1' : '0'); paintSpeak(); if (!speakOn) stopAudio(); });

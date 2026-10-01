@@ -185,6 +185,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware('permission:settings.manage')->group(function () {
             Route::get('settings', [Admin\SettingController::class, 'edit'])->name('settings');
             Route::put('settings', [Admin\SettingController::class, 'update'])->name('settings.update');
+            Route::post('settings/check', [Admin\SettingController::class, 'check'])->name('settings.check');
             Route::get('home-settings', [Admin\HomeSettingController::class, 'edit'])->name('home-settings');
             Route::put('home-settings', [Admin\HomeSettingController::class, 'update'])->name('home-settings.update');
             Route::resource('menus', Admin\MenuItemController::class)->except(['show']);
