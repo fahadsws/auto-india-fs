@@ -155,3 +155,10 @@ Deploy: `php artisan migrate` (adds `assistant_sessions.memory`), `php artisan o
 **Deploy**: no migration. `php artisan optimize:clear`, then Settings -> Rebuild knowledge base now.
 
 **Tests**: `tests/Feature/AssistantTest.php` was rewritten for this flow (needs MySQL, as before). The flow engine (dates, slots, places, steps, cancel, digress, number pick, enquiry) was also exercised stand-alone.
+
+## Cards match the answer, mis-heard model names, "open its page", honest news
+- **Cards = the car discussed.** When a reply is about one car, only that car's card is shown (with its real price), not the top search hits. If the reply names two cars, both show. That car also becomes the "selected" car, so "iski details", "page par le jao" and "test drive" refer to it.
+- **Mis-heard / mistyped model names.** The word after a brand is matched by sound against that brand's own models: "Tata Syria", "टाटा सीरिया" -> Tata Sierra (the AI is told what was meant). Only brand-adjacent words are corrected, so ordinary words are never changed.
+- **"Take me to its page"** ("iske page par le jao", "open the page", "link do") opens the selected car's detail page (browser redirects, card shown, no AI call). Asking for *details/information* is answered by the AI, not treated as navigation.
+- **News honesty.** If the visitor names something with no matching article, the assistant says so and shows no unrelated "latest" stories; only a general "latest news" shows the newest.
+- Asking about a car already selected no longer gets a canned "Nice pick"; the AI answers from the data.

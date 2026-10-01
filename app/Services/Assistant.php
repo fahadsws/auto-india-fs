@@ -33,6 +33,10 @@ class Assistant
     private const BUY = '/\b(chahiye|chaiye|chahie|chahta|chahti|buy|kharid|kharidna|lena|leni|looking for|want|need|dikhao|dikha|show|interested)\b/i';
     /** "show me / tell me about / suggest cars": an explicit request for cars gets real results straight away. */
     private const SHOW_INTENT = '/\b(batao|bataiye|bata do|bataye|dikhao|dikhaiye|dikha do|dikha|dikhana|dekhna|dekhni|dekhne|show|list|suggest|recommend|options?|chahiye|chaiye|chahie|chahta|chahti|looking for|want|need|buy|kharid|kharidna|lena|leni|available)\b/i';
+    /** "take me to its page", "iske page par le jao", "open details", "link do". */
+    private const OPEN_PAGE = '/\b(page|link)\b.*\b(le ?jao|le ?chalo|le ?chal|kholo|open|dikhao|do|dena|bhejo|par jao|pe jao)\b|\b(le ?jao|le ?chalo|take me|open|kholo|go to)\b.*\b(page|link)\b/i';
+    /** Asking ABOUT a car (not just picking it): the AI answers from our data. */
+    private const INFO = '/\b(information|info|details?|price|cost|batao|bataiye|bata|share|about|baare|bare|mileage|features?|specs?|kya|kitna|kitni|review|compare|tell)\b/i';
     private const HINDI = '/[\x{0900}-\x{097F}]|\b(mujhe|muje|mere|mera|meri|chahiye|chaiye|chahie|kya|kaun|kitna|kitne|nahi|nhi|haan|aap|apna|mein|mai|hai|hain|karna|karni|dikhao|dikha|sare|saare|gaadi|gadi|batao|bataiye|wali|wala|purani|nayi)\b/iu';
 
     /** A chat that has been silent this long starts fresh (so an old conversation never leaks into a new visit). */
@@ -43,6 +47,8 @@ class Assistant
     {
         $message = Str::limit(trim(preg_replace('/\s+/', ' ', $message)), AssistantGuard::limit('max_input') ?: 300, '');
         $norm = HindiText::normalize($message);          // Devanagari -> English words, for filters / intent rules / knowledge search
+        [$norm, $fixes] = SiteData::correctModelNames($norm);       // "Tata Syria" / "टाटा सीरिया" -> "Tata Sierra"
+        $nameNote = $fixes ? 'The visitor wrote '.collect($fixes)->map(fn ($meant, $wrote) => "\"$wrote\" - they most likely mean \"$meant\"")->implode('; ').' (a model of that brand). Treat it as that model.' : '';
         $m = AssistantMemory::get($session);
 
         // A new chat id (new chat button, page refresh) or a long silence = a fresh conversation, whatever the server remembered.
@@ -94,6 +100,20 @@ class Assistant
             if (preg_match(AssistantFlow::NO, $plain)) { $m['turns']++; return $this->done($session, $ip, $message, $this->t('no_offer', $hi), 'none', [], $voice, $m, $none, []); }
         }
 
+        // 2c) "take me to its page": open the detail page of the car being discussed.
+        if (! $reminder && preg_match(self::OPEN_PAGE, $norm) && ! preg_match(self::SHOW_ALL, $norm)) {
+            $target = $ref ?? $m['focus'] ?? (count($m['shown']) === 1 ? $m['shown'][0] : null) ?? AssistantFlow::findCarByName($norm);
+            $model = $target ? AssistantMemory::find($target) : null;
+            $m['turns']++;
+            if ($model) {
+                $item = AssistantMemory::item($model); $m['focus'] = $item; $m['stage'] = 'interested';
+                $img = $model instanceof \App\Models\VehicleModel ? $model->hero_url : $model->image_url;
+                return $this->done($session, $ip, $message, $this->t('opening_page', $hi, ['car' => $item['t']]), 'kb', [['title' => $item['t'], 'url' => $item['u'], 'image' => $img, 'type' => $item['k'] === 'c' ? 'car' : 'listing', 'k' => $item['k'], 'id' => $item['id'], 'price' => $item['p']]], $voice, $m, ['mode' => 'database', 'items' => [['type' => 'car', 'title' => $item['t'], 'url' => $item['u']]]],
+                    [['type' => 'navigate', 'url' => $item['u'], 'label' => $this->t('open_label', $hi), 'count' => 1, 'auto' => true]]);
+            }
+            return $this->done($session, $ip, $message, $this->t('which_page', $hi), 'none', [], $voice, $m, $none, []);
+        }
+
         $filters = AssistantMemory::merge($m['f'], $parsed);
         $siteWords = (bool) preg_match(self::SITE_WORDS, $norm);
         $kinds = count(array_intersect_key($parsed, array_flip(['price_min', 'price_max', 'fuel', 'transmission', 'city', 'brand_id', 'body_id', 'year', 'year_min', 'year_max', 'km_max', 'owner', 'status'])));
@@ -124,7 +144,7 @@ class Assistant
         }
 
         // 3b) They pointed at one of the shown cars ("pehli wali", "this one"): confirm it and offer the next step.
-        if ($ref && ! $run && ! $siteWords && ! $contentKind && ! $reminder && $short) {
+        if ($ref && ! $run && ! $siteWords && ! $contentKind && ! $reminder && $short && ! preg_match(self::INFO, $norm)) {
             $m['stage'] = 'interested'; $m['ask'] = 'offer'; $m['turns']++;
             return $this->done($session, $ip, $message, $this->t('selected', $hi, ['car' => $ref['t'], 'price' => $ref['p'] ?? '']), 'none', [], $voice, $m, $none, []);
         }
@@ -136,6 +156,11 @@ class Assistant
             $m['f'] = $this->clean($filters); $m['shown'] = $db['items']; $m['stage'] = $db['found'] ? 'shortlist' : $m['stage'];
         }
         $content = $contentKind ? SiteData::contentLookup($contentKind, $norm) : null;
+        $noNews = '';
+        if ($content && $content['specific'] && ! $content['found']) {      // they named something and we have no such story: say so, never show unrelated ones
+            $noNews = "No ".($contentKind === 'news' ? 'news articles' : 'videos')." on our site match '{$content['words']}'. Say so in one short sentence, then share what we do have about it below (if anything).";
+            $content = null;
+        }
 
         // 5) "Show me all ..." -> open the real, filtered page (the page applies the same filters, so the same cars are there).
         if ($showAll && $db) {
@@ -155,9 +180,11 @@ class Assistant
         $hits = $hits->take(3)->values();
 
         $dataSource = $db ?? $content;
+        $hitsOnly = ! $dataSource;
         $site = $dataSource !== null || $hits->isNotEmpty();
         $ctx = trim(($dataSource['context'] ?? '').($hits->isNotEmpty() ? ($dataSource ? "\n\n" : '').$hits->map(fn ($h, $i) => '['.($i + 1)."] ({$h->type}) {$h->title}\n".Str::limit($h->content, in_array($h->type, ['car', 'listing'], true) ? 700 : ($h->type === 'webpage' ? 1100 : 450), '…'))->implode("\n\n") : ''));
-        $links = $dataSource['links'] ?? $hits->take(3)->map(fn ($h) => ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type])->values()->all();
+        if ($noNews || $nameNote) $ctx = trim(implode("\n", array_filter([$noNews, $nameNote]))."\n\n".$ctx);
+        $links = $dataSource['links'] ?? $this->cards($hits);
         $sources = $site ? ['mode' => $db ? 'database' : ($content ? 'content' : 'search'), 'items' => array_merge($dataSource['sources'] ?? [], $hits->map(fn ($h) => ['type' => $h->type, 'title' => $h->title, 'url' => KnowledgeBase::absolute($h->url)])->all())] : $none;
         $source = $site ? 'kb' : 'web';
 
@@ -201,6 +228,12 @@ class Assistant
             $answer = $this->tidy($answer, (bool) $follow);
         } else {
             [$answer, $source, $links, $sources] = $this->plainAnswer($db, $content, $hits, $norm, $hi, [$source, $links, $sources, $none]);
+        }
+        if ($hitsOnly && $links) {
+            $links = $this->matchCards($links, $answer, $norm);                          // cards show the car(s) the answer is about, not the top search hits
+            if (count($links) === 1 && isset($links[0]['k'], $links[0]['id']) && ($model = AssistantMemory::find(['k' => $links[0]['k'], 'id' => $links[0]['id']]))) {
+                $m['focus'] = AssistantMemory::item($model); $m['stage'] = 'interested';   // so "iski details", "page par le jao", "test drive" refer to it
+            }
         }
         if ($follow) $answer = trim($answer."\n\n".$follow['text']);
         if ($fromAi && $cacheable) Cache::put($ckey, ['answer' => $answer, 'source' => $source, 'links' => $links, 'sources' => $sources], now()->addDay());
@@ -281,6 +314,44 @@ class Assistant
             return [$this->t('found', $hi).$fallback->pluck('title')->implode('; ').'.', 'kb', $links, $sources];
         }
         return [$this->t('nothing', $hi), 'none', [], $none];
+    }
+
+    /** Cards for knowledge hits: cars get their real price and ids so they can be opened / referred to. */
+    private function cards($hits): array
+    {
+        return $hits->take(3)->map(function ($h) {
+            $card = ['title' => $h->title, 'url' => KnowledgeBase::absolute($h->url), 'image' => KnowledgeBase::absolute($h->image), 'type' => $h->type];
+            if (in_array($h->type, ['car', 'listing'], true)) {
+                $model = $h->type === 'car' ? \App\Models\VehicleModel::published()->find($h->ref_id) : \App\Models\Listing::active()->find($h->ref_id);
+                if ($model) $card = array_merge($card, ['k' => $h->type === 'car' ? 'c' : 'l', 'id' => $model->id, 'price' => $model->price_label, 'title' => $h->type === 'car' ? $model->full_name : $model->title]);
+            }
+            return $card;
+        })->values()->all();
+    }
+
+    /** When the reply is about one car, show that car's card - not every search hit. Falls back to the question, then to all hits. */
+    private function matchCards(array $links, string $answer, string $norm): array
+    {
+        if (count($links) < 2) return $links;
+        $keys = fn (string $title) => collect(preg_split('/[^\p{L}\p{N}]+/u', Str::lower(preg_replace('/\(.*?\)/', '', $title)), -1, PREG_SPLIT_NO_EMPTY))
+            ->reject(fn ($t) => in_array($t, ['launched', 'upcoming', 'facelift', 'new', 'discontinued'], true))->values();
+        $in = function (string $text) use ($links, $keys) {
+            $text = Str::lower($text); $found = [];
+            foreach ($links as $l) {
+                $k = $keys($l['title']);
+                if ($k->count() > 1) $k = $k->slice(1)->values();                  // drop the brand word: "tata sierra" -> "sierra"
+                if ($k->isEmpty()) continue;
+                $pos = $k->map(fn ($t) => preg_match('/(?<![\p{L}\p{N}])'.preg_quote($t, '/').'(?![\p{L}\p{N}])/u', $text, $mm, PREG_OFFSET_CAPTURE) ? $mm[0][1] : null);
+                if ($pos->contains(null)) continue;
+                $found[$pos->min()] = $l;
+            }
+            ksort($found);
+            return array_values($found);
+        };
+        $inAnswer = $in($answer);
+        if ($inAnswer) return $inAnswer;
+        $inQuestion = $in($norm);
+        return $inQuestion ?: $links;
     }
 
     /** Keep the AI's text clean: no pasted links, and no questions of its own when the app is about to ask one (never several). */
@@ -377,6 +448,8 @@ class Assistant
             'anything_else' => [['Is there anything else I can help you with?'], ['Aur kuch madad chahiye?']],
             'opening' => [['Opening all {n} {what} for you…'], ['{n} {what} ka poora page khol raha hoon…']],
             'open_label' => [['Open now'], ['Abhi kholo']],
+            'opening_page' => [['Opening the {car} page for you…'], ['{car} ka page khol raha hoon…']],
+            'which_page' => [["Which car's page should I open? Tell me the name."], ['Kaunsi car ka page kholun? Naam bata dijiye.']],
             'view_all' => [['View all {n} cars →'], ['Saari {n} cars dekhein →']],
             'found_n' => [['I found {n} {desc}. Here are the top picks:'], ['Mujhe {n} {desc} mili hain. Top picks yeh hain:']],
             'reask_city' => [["Just tell me the city - for example Pune or Delhi - or say 'anywhere'."], ["Bas city ka naam bata dijiye - jaise Pune ya Delhi - ya bolein 'kahin bhi'."]],

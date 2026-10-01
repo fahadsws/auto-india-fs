@@ -43,7 +43,7 @@ class AssistantFlow
     public static function findCarByName(string $text): ?array
     {
         $words = collect(preg_split('/[^\p{L}\p{N}]+/u', Str::lower($text), -1, PREG_SPLIT_NO_EMPTY))
-            ->filter(fn ($w) => mb_strlen($w) >= 3 && ! in_array($w, ['test', 'drive', 'book', 'inspection', 'car', 'cars', 'used', 'new', 'for', 'the', 'and', 'ki', 'ka', 'ke', 'karni', 'karna', 'chahiye', 'chaiye', 'mujhe', 'muje', 'want', 'need', 'please', 'show', 'this', 'that', 'one', 'wali', 'wala', 'ghar', 'home', 'showroom', 'kal', 'aaj', 'tomorrow', 'today', 'morning', 'evening', 'afternoon', 'subah', 'shaam', 'dopahar'], true))->take(3);
+            ->filter(fn ($w) => mb_strlen($w) >= 3 && ! in_array($w, ['test', 'drive', 'book', 'inspection', 'car', 'cars', 'used', 'new', 'for', 'the', 'and', 'ki', 'ka', 'ke', 'karni', 'karna', 'chahiye', 'chaiye', 'mujhe', 'muje', 'want', 'need', 'please', 'show', 'this', 'that', 'one', 'wali', 'wala', 'ghar', 'home', 'showroom', 'kal', 'aaj', 'tomorrow', 'today', 'morning', 'evening', 'afternoon', 'subah', 'shaam', 'dopahar', 'page', 'link', 'detail', 'details', 'take', 'open', 'kholo', 'jao', 'chalo', 'iske', 'iski', 'iska', 'information', 'share', 'batao', 'bata'], true))->take(3);
         if ($words->isEmpty()) return null;
         $like = fn ($q, $col) => $words->each(fn ($w) => $q->where($col, 'like', "%$w%"));
         $l = $like(Listing::active(), 'title')->latest('updated_at')->first();

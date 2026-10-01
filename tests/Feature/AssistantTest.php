@@ -639,6 +639,72 @@ class AssistantTest extends TestCase
         $this->get('/cars?price_min=1000000')->assertOk()->assertSee('Maruti Baleno')->assertDontSee('Hyundai Creta SX Diesel');
     }
 
+    private function tataCatalog(): void
+    {
+        $brand = \App\Models\VehicleBrand::create(['name' => 'Tata', 'is_active' => true]);
+        foreach ([['Aeris', 'aeris', 1500000], ['Sierra', 'sierra', 1149000], ['Nexon', 'nexon', 800000]] as [$n, $slug, $price]) {
+            \App\Models\VehicleModel::create(['brand_id' => $brand->id, 'name' => $n, 'slug' => $slug, 'status' => 'launched', 'price_min' => $price, 'is_published' => true, 'vehicle_type' => 'car',
+                'overview' => "Tata $n is a car by Tata Motors with a starting price of rupees $price. Tata Motors range."]);
+        }
+        \App\Services\CarMasters::flush(); Cache::flush();
+    }
+
+    public function test_a_question_about_one_car_shows_only_that_car_with_price_and_its_page_opens_on_request(): void
+    {
+        $this->tataCatalog();
+        $token = $this->verified();
+        $this->aiText = 'Tata Sierra ek compact SUV hai, starting price 11.49 lakh rupees.';
+        $this->fakeAi();
+
+        // the visitor says "Syria" (voice / typo): it is understood as the Tata Sierra
+        $r = $this->chat($token, 'Tata Syria ki information batao')->assertOk();
+        $this->assertStringContainsString('most likely mean', $this->aiPayload());
+        $this->assertSame(['Tata Sierra'], collect($r->json('links'))->pluck('title')->all());          // ONE car discussed -> ONE card (not Aeris + Sierra)
+        $this->assertSame('₹ 11.49 Lakh', $r->json('links.0.price'));
+        $this->assertSame('Tata Sierra', AssistantSession::first()->memory['focus']['t']);              // follow-ups now refer to it
+
+        // asking for information about the car already in focus is answered by the AI (not a canned "nice pick")
+        $i = $this->chat($token, 'Tata Sierra ki details share karo')->assertOk();
+        $this->assertStringContainsString('compact SUV', $i->json('answer'));
+        $this->assertSame(['Tata Sierra'], collect($i->json('links'))->pluck('title')->all());
+        $calls = count(Http::recorded());
+
+        // "take me to its page": opens the car's page, no AI call, no "I don't have a link"
+        $p = $this->chat($token, 'mujhe iske page par le jao')->assertOk();
+        $this->assertSame('navigate', $p->json('actions.0.type'));
+        $this->assertTrue($p->json('actions.0.auto'));
+        $this->assertStringEndsWith('/new-cars/sierra', $p->json('actions.0.url'));
+        $this->assertSame('Tata Sierra', $p->json('links.0.title'));
+        $this->assertSame($calls, count(Http::recorded()));
+        $this->get('/new-cars/sierra')->assertOk();
+
+        // Devanagari in a brand-new chat resolves to the same car
+        $d = $this->postJson('/assistant/chat', ['message' => 'टाटा सीरिया की इनफार्मेशन शेयर', 'cid' => 'fresh'], ['X-Assistant-Token' => $token])->assertOk();
+        $this->assertSame(['Tata Sierra'], collect($d->json('links'))->pluck('title')->all());
+    }
+
+    public function test_when_the_answer_names_two_cars_both_cards_show_and_unrelated_news_is_never_shown(): void
+    {
+        $this->tataCatalog();
+        \App\Models\Article::create(['title' => 'Jetour T2 Facelift Debuts Globally', 'slug' => 'jetour', 'excerpt' => 'x', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHour()]);
+        \App\Models\Article::create(['title' => 'Simple OneS Electric Scooter Discontinued', 'slug' => 'simple', 'excerpt' => 'x', 'body' => 'x', 'status' => 'published', 'published_at' => now()->subHours(2)]);
+        $token = $this->verified();
+        $this->aiText = 'Mere paas Tata Aeris aur Tata Sierra hain, Sierra 11.49 lakh se shuru hoti hai.';
+        $this->fakeAi();
+        $r = $this->chat($token, 'Tata Harrier ke baare mein batao')->assertOk();
+        $this->assertEqualsCanonicalizing(['Tata Aeris', 'Tata Sierra'], collect($r->json('links'))->pluck('title')->all());
+
+        $this->aiText = 'Sorry, there is no news about it on our site.';
+        $n = $this->chat($token, 'Tata Harrier ke baare mein news batao')->assertOk();
+        $titles = collect($n->json('links'))->pluck('title')->implode(' | ');
+        $this->assertStringNotContainsString('Jetour', $titles);                                         // no unrelated "latest" articles
+        $this->assertStringNotContainsString('Simple', $titles);
+        $this->assertStringContainsString("No news articles on our site match", $this->aiPayload());
+
+        $g = $this->chat($token, 'latest news dikhao')->assertOk();                                      // a general request still shows the newest
+        $this->assertContains('Jetour T2 Facelift Debuts Globally', collect($g->json('links'))->pluck('title')->all());
+    }
+
     public function test_dynamic_page_content_answers_questions_even_without_site_words(): void
     {
         \App\Models\Page::create(['title' => 'Exchange bonus scheme', 'slug' => 'exchange-bonus', 'status' => 'published', 'body' => '<p>Bring your old vehicle and receive an additional bonus voucher worth 25000 rupees at purchase.</p>']);

@@ -135,6 +135,61 @@ class SiteData
         return ['context' => implode("\n\n", $parts), 'links' => $links, 'sources' => $sources, 'found' => $found, 'items' => $items, 'lines' => $lines, 'totals' => $totals, 'desc' => $desc];
     }
 
+    private const NAME_SKIP = ['ki', 'ke', 'ka', 'ko', 'mein', 'me', 'for', 'the', 'and', 'price', 'news', 'review', 'reviews', 'car', 'cars', 'suv', 'electric', 'petrol', 'diesel', 'new', 'used', 'test', 'drive', 'details', 'detail', 'information', 'info', 'share', 'bata', 'batao', 'dikhao', 'kya', 'hai', 'baare', 'about', 'page', 'link', 'mujhe', 'muje', 'chahiye', 'under', 'lakh', 'launch', 'launched', 'upcoming', 'offers', 'emi', 'loan', 'finance', 'models', 'model', 'variant', 'variants', 'mileage', 'specs', 'features', 'colours', 'colors', 'wali', 'wala', 'iski', 'iske', 'iska', 'koi', 'kuch', 'aur', 'dena', 'chahie', 'chaiye', 'kitna', 'kitni', 'available', 'latest', 'stock', 'show', 'tell', 'give', 'want', 'need', 'looking', 'from'];
+
+    /** Skeleton of a name for sound-alike matching: no vowels / y / w, doubles collapsed. "sierra", "syria", "सीरिया" -> "sr". */
+    private static function skeleton(string $w): string
+    {
+        return preg_replace('/(.)\1+/', '$1', preg_replace('/[aeiouyw]/', '', Str::lower($w)));
+    }
+
+    /** Model-name words of a brand (new catalog + used stock), cached. */
+    private static function modelTokens(int $brandId): array
+    {
+        return Cache::remember('asst:models:'.$brandId, 600, function () use ($brandId) {
+            $names = VehicleModel::published()->where('brand_id', $brandId)->pluck('name')->merge(Listing::active()->where('brand_id', $brandId)->pluck('model'));
+            return $names->flatMap(fn ($n) => preg_split('/[^\p{L}\p{N}]+/u', Str::lower((string) $n), -1, PREG_SPLIT_NO_EMPTY))
+                ->filter(fn ($t) => mb_strlen($t) >= 3 && ! ctype_digit($t) && ! in_array($t, self::NAME_SKIP, true))->unique()->values()->all();
+        });
+    }
+
+    /**
+     * Voice / typing often garbles a model name ("Tata Syria", "टाटा सीरिया" for Sierra). The word right after a brand is matched
+     * against that brand's own models by sound; only then is it corrected. @return array{0:string,1:array<string,string>} text, [wrote => meant]
+     */
+    public static function correctModelNames(string $norm): array
+    {
+        if (! preg_match_all('/[\p{L}\p{M}\p{N}]+/u', $norm, $mm, PREG_OFFSET_CAPTURE) || count($mm[0]) < 2) return [$norm, []];
+        $tokens = $mm[0];
+        $fixes = [];
+        foreach (self::brands() as $id => $brand) {
+            $key = Str::lower(Str::before($brand, ' '));
+            foreach ($tokens as $i => [$tok]) {
+                if (Str::lower($tok) !== $key) continue;
+                $models = self::modelTokens((int) $id);
+                if (! $models) continue;
+                foreach ([$i + 1, $i + 2] as $j) {
+                    if (! isset($tokens[$j])) continue;
+                    [$cand, $off] = $tokens[$j];
+                    $low = Str::lower($cand);
+                    if (mb_strlen($cand) < 3 || in_array($low, self::NAME_SKIP, true) || in_array($low, $models, true) || isset($fixes[$cand])) continue;
+                    $lat = HindiText::has($cand) ? HindiText::latinize($cand) : $low;
+                    if (mb_strlen($lat) < 2) continue;
+                    $best = null; $bestD = 99;
+                    foreach ($models as $mt) {
+                        $d = levenshtein($lat, $mt);
+                        $same = self::skeleton($lat) === self::skeleton($mt) && $lat[0] === $mt[0];
+                        $close = ! HindiText::has($cand) && $d <= (mb_strlen($mt) >= 6 ? 2 : 1);
+                        if (($same || $close) && $d < $bestD) { $best = $mt; $bestD = $d; }
+                    }
+                    if ($best) { $fixes[$cand] = Str::title($best); }
+                }
+            }
+        }
+        foreach ($fixes as $wrote => $meant) $norm = preg_replace('/(?<![\p{L}\p{M}])'.preg_quote($wrote, '/').'(?![\p{L}\p{M}])/u', $meant, $norm);
+        return [$norm, $fixes];
+    }
+
     private const CONTENT_STOP = ['news', 'latest', 'new', 'newest', 'recent', 'today', 'khabar', 'khabrein', 'samachar', 'article', 'articles', 'video', 'videos', 'review', 'reviews', 'show', 'tell', 'about', 'dikhao', 'batao', 'bataiye', 'dikha', 'cars', 'car', 'gaadi', 'gadi', 'mujhe', 'muje', 'kuch', 'koi', 'abhi', 'headlines', 'from', 'your', 'site', 'website', 'give', 'want', 'need', 'please', 'any', 'the', 'and', 'for', 'with', 'what', 'whats', 'have', 'you'];
 
     public static function newsIntent(string $t): bool
@@ -162,15 +217,16 @@ class SiteData
             $rows = $base()->where(fn ($q) => $words->each(fn ($w) => $q->orWhere('title', 'like', "%$w%")))->latest($dateCol)->limit(3)->get();
         }
         $matched = $rows->isNotEmpty();
-        if (! $matched) $rows = $base()->latest($dateCol)->limit(3)->get();
+        $specific = $words->isNotEmpty();
+        if (! $matched && ! $specific) $rows = $base()->latest($dateCol)->limit(3)->get();     // only a general "latest news" falls back to the newest
 
         $label = $isNews ? 'NEWS ARTICLES' : 'VIDEOS';
         $lines = $rows->map(fn ($r) => $r->title.($r->$dateCol ? ' ('.$r->$dateCol->format('d M Y').')' : ''))->all();
         $context = $rows->isEmpty()
-            ? "$label: none published yet."
+            ? ($specific ? "$label: none about '".$words->implode(' ')."' on our site." : "$label: none published yet.")
             : "$label ".($matched ? 'matching the question' : 'latest').":\n".$rows->map(fn ($r) => '- '.$r->title.($r->$dateCol ? ' ('.$r->$dateCol->format('d M Y').')' : '').($isNews && $r->excerpt ? ': '.Str::limit(strip_tags($r->excerpt), 160, '…') : ''))->implode("\n");
         return [
-            'context' => $context, 'kind' => $kind, 'found' => $rows->count(), 'lines' => $lines, 'matched' => $matched,
+            'context' => $context, 'kind' => $kind, 'found' => $rows->count(), 'lines' => $lines, 'matched' => $matched, 'specific' => $specific, 'words' => $words->implode(' '),
             'links' => $rows->map(fn ($r) => ['title' => $r->title, 'url' => $r->url, 'image' => $isNews ? $r->image_url : $r->thumbnail, 'type' => $isNews ? 'article' : 'video'])->all(),
             'sources' => $rows->map(fn ($r) => ['type' => $isNews ? 'article' : 'video', 'title' => $r->title, 'url' => $r->url])->all(),
         ];

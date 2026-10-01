@@ -34,6 +34,8 @@ class HindiText
         'कहीं भी' => 'anywhere', 'कहीं' => 'anywhere', 'कोई भी' => 'any', 'कोई सीमा नहीं' => 'no limit', 'कोई लिमिट नहीं' => 'no limit',
         'नमस्ते' => 'namaste', 'नमस्कार' => 'namaskar', 'धन्यवाद' => 'dhanyavad', 'शुक्रिया' => 'shukriya', 'हाँ' => 'haan', 'हां' => 'haan', 'नहीं' => 'nahi',
         'पता' => 'address', 'संपर्क' => 'contact', 'नंबर' => 'phone', 'समय' => 'timings', 'सेवाएं' => 'services', 'ऑफर' => 'offers', 'वारंटी' => 'warranty', 'बीमा' => 'insurance', 'शोरूम' => 'showroom', 'डीलर' => 'dealer',
+        'पेज' => 'page', 'ले जाओ' => 'le jao', 'ले चलो' => 'le chalo', 'खोलो' => 'kholo', 'खोलिए' => 'kholo', 'डिटेल्स' => 'details', 'डिटेल' => 'detail', 'लिंक' => 'link', 'इसके' => 'iske', 'इसकी' => 'iski', 'इसका' => 'iska',
+        'इनफार्मेशन' => 'information', 'इन्फॉर्मेशन' => 'information', 'इन्फोर्मेशन' => 'information', 'जानकारी' => 'information', 'शेयर' => 'share',
         'समाचार' => 'news', 'ख़बर' => 'news', 'खबर' => 'news', 'वीडियो' => 'video', 'तुलना' => 'compare', 'ब्रोशर' => 'brochure',
         // cities
         'दिल्ली' => 'Delhi', 'मुंबई' => 'Mumbai', 'मुम्बई' => 'Mumbai', 'बेंगलुरु' => 'Bengaluru', 'बैंगलोर' => 'Bengaluru', 'बेंगलूरु' => 'Bengaluru', 'चेन्नई' => 'Chennai', 'हैदराबाद' => 'Hyderabad',
@@ -54,6 +56,21 @@ class HindiText
     private static function nfc(string $s): string
     {
         return class_exists(\Normalizer::class) ? (\Normalizer::normalize($s, \Normalizer::FORM_C) ?: $s) : $s;
+    }
+
+    private const CONS = ['क' => 'k', 'ख' => 'k', 'ग' => 'g', 'घ' => 'g', 'च' => 'c', 'छ' => 'c', 'ज' => 'j', 'झ' => 'j', 'ट' => 't', 'ठ' => 't', 'ड' => 'd', 'ढ' => 'd', 'ण' => 'n', 'त' => 't', 'थ' => 't', 'द' => 'd', 'ध' => 'd', 'न' => 'n',
+        'प' => 'p', 'फ' => 'f', 'ब' => 'b', 'भ' => 'b', 'म' => 'm', 'य' => 'y', 'र' => 'r', 'ल' => 'l', 'व' => 'v', 'श' => 's', 'ष' => 's', 'स' => 's', 'ह' => 'h', 'ळ' => 'l'];
+
+    /** Rough Devanagari -> Latin (consonants matter, vowels are 'a'): enough to compare a spoken car name with the catalog. */
+    public static function latinize(string $word): string
+    {
+        $out = '';
+        foreach (preg_split('//u', self::nfc($word), -1, PREG_SPLIT_NO_EMPTY) as $ch) {
+            if (isset(self::CONS[$ch])) $out .= self::CONS[$ch];
+            elseif (preg_match('/[\x{0904}-\x{0914}\x{093E}-\x{094C}]/u', $ch)) $out .= 'a';
+            elseif (preg_match('/[A-Za-z0-9]/', $ch)) $out .= strtolower($ch);
+        }
+        return $out;
     }
 
     public static function has(string $text): bool
