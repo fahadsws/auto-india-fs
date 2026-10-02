@@ -124,4 +124,10 @@ class MechanicTest extends TestCase
         $this->postJson('/online-mechanic/chat', $this->body(), $h)->assertOk();
         $this->postJson('/online-mechanic/chat', $this->body(), $h)->assertStatus(429);
     }
+
+    public function test_zones_are_limited_to_known_car_parts(): void
+    {
+        $this->fakeAi(['reply' => 'Brake check karo.', 'stage' => 'asking', 'zones' => ['brakes', 'tyres', 'warp-drive', '<b>x</b>', 'brakes', 'engine', 'ac']]);
+        $this->postJson('/online-mechanic/chat', $this->body(), $this->verified())->assertOk()->assertJsonPath('zones', ['brakes', 'tyres', 'engine']);
+    }
 }

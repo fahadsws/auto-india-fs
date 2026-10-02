@@ -28,11 +28,12 @@
 
         <header class="mch-hero">
           <div class="mch-hero-in">
-            <span class="mch-kick"><i></i> LIVE WORKSHOP · AI MECHANIC</span>
+            <span class="mch-kick"><i></i> LIVE · AI MECHANIC</span>
             <h1>Gaadi ko kya hua? <em>Mechanic Bhai</em> se poochho.</h1>
-            <p>Problem chat mein batao. Bhai sahi sawaal poochega, wajah samjhayega, kya karna hai aur <b>kitna kharcha hona chahiye</b> — taaki aap zyada paisa na do.</p>
+            <p>Gaadi ke X-ray par jo hissa pareshan kar raha hai use tap karo. Bhai sahi sawaal poochega, wajah samjhayega aur batayega <b>kitna kharcha hona chahiye</b> — taaki aap zyada paisa na do.</p>
+            <ul class="mch-points"><li>🔍 Sahi sawaal</li><li>🧾 Fair kharcha</li><li>🚫 Upsell se bachao</li><li>📄 PDF estimate</li></ul>
           </div>
-          <div class="mch-gauge" aria-hidden="true"><svg viewBox="0 0 120 70"><path d="M10 62a50 50 0 0 1 100 0" fill="none" stroke="#2c333d" stroke-width="10" stroke-linecap="round"/><path d="M10 62a50 50 0 0 1 100 0" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-dasharray="120 200"/><defs><linearGradient id="g"><stop offset="0" stop-color="#2ecc71"/><stop offset=".55" stop-color="#ffd23f"/><stop offset="1" stop-color="#ff3b3b"/></linearGradient></defs><g class="mch-needle"><line x1="60" y1="62" x2="60" y2="22" stroke="#fff" stroke-width="3" stroke-linecap="round"/><circle cx="60" cy="62" r="6" fill="#ff7a1a"/></g></svg></div>
+          <div class="mch-road" aria-hidden="true"></div>
         </header>
 
         {{-- gate: only shown if this visitor is not verified yet (same one-time check as the AI assistant) --}}
@@ -64,21 +65,33 @@
           <p class="mch-fine"><button type="button" class="mch-lnk" id="otpResend" disabled>Code dobara bhejo</button> · <button type="button" class="mch-lnk" id="otpBack">Details badlo</button></p>
         </form>
 
-        {{-- the workshop: chat + live job card --}}
+        {{-- the workshop: X-ray car + chat --}}
         <section class="mch-view mch-shop" id="vShop">
-          <div class="mch-chat">
-            <div class="mch-msgs" id="mMsgs" aria-live="polite"></div>
-            <div class="mch-quick" id="mQuick"></div>
-            <form class="mch-input" id="mForm" autocomplete="off">
-              <button type="button" class="mch-mic" id="mMic" title="Bol ke batao" aria-label="Bol ke batao" hidden>🎙</button>
-              <textarea id="mText" rows="1" maxlength="500" placeholder="Problem likho: jaise brake pe awaaz…" aria-label="Apni problem likho"></textarea>
-              <button class="mch-send" id="mSend" aria-label="Bhejo">➤</button>
-            </form>
-            <div class="mch-foot"><span id="mLeft"></span><span>AI se andaza hai · <button type="button" class="mch-lnk" id="mReset">Nayi problem</button></span></div>
-          </div>
+          <div class="mch-left">
+            <div class="mch-xray">
+              <div class="mch-xhead"><b>Gaadi ka X-ray</b><span id="mXhint">Jo hissa pareshan kar raha hai, use tap karo 👆</span></div>
+              <div class="mch-xcar" id="mXcar">
+                <svg viewBox="0 0 600 260" role="img" aria-label="Car ka side view X-ray" class="mch-svg">
+                  <ellipse cx="302" cy="242" rx="270" ry="9" fill="#000" opacity=".08"/>
+                  <path d="M30 190V150Q30 128 58 122L132 108Q172 70 236 64H384Q436 66 468 104L540 114Q574 120 574 152V190Q574 200 564 200H36Q30 200 30 190Z" fill="#fff" stroke="#16181d" stroke-width="4" stroke-linejoin="round"/>
+                  <path d="M168 106Q198 78 246 76H292V106Z" fill="#d9ecff" stroke="#16181d" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M304 76H374Q408 80 430 106H304Z" fill="#d9ecff" stroke="#16181d" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M298 76V192" stroke="#16181d" stroke-width="2" opacity=".3"/>
+                  <rect x="33" y="136" width="24" height="14" rx="5" fill="#ffd23f" stroke="#16181d" stroke-width="3"/><rect x="548" y="130" width="22" height="14" rx="5" fill="#d90000" stroke="#16181d" stroke-width="3"/>
+                  <g class="mch-xr" fill="rgba(217,0,0,.06)" stroke="#d90000" stroke-width="2.5" stroke-dasharray="6 5" stroke-linecap="round">
+                    <rect x="66" y="124" width="92" height="52" rx="9"/><rect x="82" y="134" width="24" height="32" rx="4"/><rect x="112" y="134" width="24" height="32" rx="4"/>
+                    <rect x="40" y="158" width="34" height="20" rx="4"/><rect x="236" y="150" width="84" height="32" rx="8"/>
+                    <path d="M170 194H520Q548 194 548 170" fill="none"/><rect x="520" y="160" width="40" height="16" rx="8"/>
+                    <path d="M180 112Q210 122 232 112" fill="none"/>
+                  </g>
+                  <g><circle cx="152" cy="200" r="48" fill="#f1ecdc" stroke="#16181d" stroke-width="3"/><circle cx="152" cy="200" r="38" fill="#16181d"/><circle cx="152" cy="200" r="23" fill="#e9e9e9"/><circle cx="152" cy="200" r="8" fill="#ffd23f" stroke="#16181d" stroke-width="2"/></g>
+                  <g><circle cx="452" cy="200" r="48" fill="#f1ecdc" stroke="#16181d" stroke-width="3"/><circle cx="452" cy="200" r="38" fill="#16181d"/><circle cx="452" cy="200" r="23" fill="#e9e9e9"/><circle cx="452" cy="200" r="8" fill="#ffd23f" stroke="#16181d" stroke-width="2"/></g>
+                </svg>
+              </div>
+              <div class="mch-zones" id="mZones"></div>
+            </div>
 
-          <aside class="mch-card">
-            <details open id="mJob">
+            <details class="mch-job" open id="mJob">
               <summary><b>Gaadi ki Job Card</b><small id="mJobHint">Details bharo ya chat mein batao</small></summary>
               <div class="mch-jobgrid">
                 <label>Gaadi<input id="pCar" maxlength="80" placeholder="Maruti Swift" autocomplete="off" list="mchCars"></label>
@@ -90,7 +103,19 @@
               <datalist id="mchCars"><option value="Maruti Swift"><option value="Maruti Alto"><option value="Maruti WagonR"><option value="Maruti Baleno"><option value="Maruti Brezza"><option value="Maruti Ertiga"><option value="Hyundai i20"><option value="Hyundai Creta"><option value="Hyundai Venue"><option value="Tata Nexon"><option value="Tata Punch"><option value="Tata Harrier"><option value="Mahindra Thar"><option value="Mahindra Scorpio"><option value="Mahindra XUV700"><option value="Honda City"><option value="Toyota Innova Crysta"><option value="Kia Seltos"></datalist>
               <div class="mch-noted" id="mNoted" hidden><b>Maine ye note kiya:</b><ul id="mNotedList"></ul></div>
             </details>
-          </aside>
+          </div>
+
+          <div class="mch-chat">
+            <div class="mch-chead"><i class="mch-av" aria-hidden="true">🔧</i><div><b>Mechanic Bhai</b><small>Online · 20 saal ka experience (AI)</small></div></div>
+            <div class="mch-msgs" id="mMsgs" aria-live="polite"></div>
+            <div class="mch-quick" id="mQuick"></div>
+            <form class="mch-input" id="mForm" autocomplete="off">
+              <button type="button" class="mch-mic" id="mMic" title="Bol ke batao" aria-label="Bol ke batao" hidden>🎙</button>
+              <textarea id="mText" rows="1" maxlength="500" placeholder="Problem likho…" aria-label="Apni problem likho"></textarea>
+              <button class="mch-send" id="mSend" aria-label="Bhejo">➤</button>
+            </form>
+            <div class="mch-foot"><span id="mLeft"></span><span>AI se andaza hai · <button type="button" class="mch-lnk" id="mReset">Nayi problem</button></span></div>
+          </div>
         </section>
 
         {{-- diagnosis --}}
@@ -127,8 +152,8 @@
   const ss = { get: k => { try { return sessionStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { sessionStorage.setItem(k, v) } catch (e) {} }, del: k => { try { sessionStorage.removeItem(k) } catch (e) {} } };
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let token = ls.get('aw_token') || '', visitor = '', busy = false;
-  let state = { msgs: [], facts: {}, diag: null };
-  try { const sv = JSON.parse(ss.get('mch_state') || 'null'); if (sv && Array.isArray(sv.msgs)) state = { msgs: sv.msgs.slice(-40), facts: sv.facts || {}, diag: sv.diag || null }; } catch (e) {}
+  let state = { msgs: [], facts: {}, diag: null, zone: '', talk: [], hot: [] };
+  try { const sv = JSON.parse(ss.get('mch_state') || 'null'); if (sv && Array.isArray(sv.msgs)) state = { msgs: sv.msgs.slice(-40), facts: sv.facts || {}, diag: sv.diag || null, zone: sv.zone || '', talk: sv.talk || [], hot: sv.hot || [] }; } catch (e) {}
   const save = () => ss.set('mch_state', JSON.stringify(state));
   const views = { wait: $('#vWait'), lead: $('#vLead'), otp: $('#vOtp'), shop: $('#vShop') };
   const show = v => { Object.entries(views).forEach(([k, n]) => n.classList.toggle('show', k === v)); $('#mResult').hidden = !(v === 'shop' && state.diag); };
@@ -224,26 +249,71 @@
 
   /* ---------- chat ---------- */
   const msgsEl = $('#mMsgs'), quickEl = $('#mQuick'), text = $('#mText');
-  const STARTERS = ['Awaaz aa rahi hai', 'AC thanda nahi karta', 'Mileage gir gaya', 'Start nahi ho rahi', 'Steering kaanp raha hai', 'Warning light aayi hai', 'Brake mein dikkat', 'Tyre jaldi ghis rahe hain'];
-  const bubble = (role, html, cls) => { const d = document.createElement('div'); d.className = 'mch-m ' + role + (cls ? ' ' + cls : ''); d.innerHTML = (role === 'assistant' ? '<i class="mch-av" aria-hidden="true">MB</i>' : '') + '<div class="mch-b">' + html + '</div>'; msgsEl.appendChild(d); msgsEl.scrollTop = msgsEl.scrollHeight; return d; };
+  /* ---------- Gaadi ka X-ray: tappable car parts ---------- */
+  const ZONES = {
+    engine: { n: 'Engine', e: '🔧', x: 19, y: 55, chips: ['Start nahi hoti', 'Awaaz aati hai', 'Dhuan / smell aati hai', 'Power / pickup kam', 'Garam ho jaata hai'], k: /engine|oil|spark|injector|coolant|radiator|overheat|misfire|timing|air filter|turbo|head gasket/i },
+    battery: { n: 'Battery', e: '🔋', x: 9, y: 66, chips: ['Start mein dikkat', 'Light dim hai', 'Warning light aayi', 'Battery jaldi down hoti hai'], k: /battery|alternator|starter|electrical|wiring|fuse|sensor|ecu|light/i },
+    ac: { n: 'AC', e: '❄️', x: 39, y: 36, chips: ['Thanda nahi karta', 'Smell aati hai', 'Awaaz aati hai', 'Paani tapakta hai'], k: /\bac\b|a\/c|compressor|condenser|refrigerant|cabin filter|blower|evaporator/i },
+    gearbox: { n: 'Gear / Clutch', e: '⚙️', x: 46, y: 64, chips: ['Gear nahi lagta', 'Clutch hard / slip', 'Jhatke lagte hain', 'Awaaz aati hai'], k: /gear|clutch|transmission|cvt|amt|flywheel/i },
+    suspension: { n: 'Suspension / Steering', e: '〰️', x: 50, y: 84, chips: ['Gaddhe pe thak-thak awaaz', 'Steering kaanp raha hai', 'Steering bhaari hai', 'Gaadi hilti hai'], k: /suspension|shock|strut|bush|steering|link rod|ball joint|rack|control arm/i },
+    brakes: { n: 'Brake', e: '🛑', x: 25, y: 79, chips: ['Brake pe awaaz', 'Pedal naram / neeche jaata hai', 'Brake pe gaadi kaanpti hai', 'Ek taraf kheenchti hai'], k: /brake|pad|disc|rotor|caliper|abs/i },
+    tyres: { n: 'Tyre', e: '⭕', x: 76, y: 62, chips: ['Jaldi ghis rahe hain', 'Hawa kam hoti rehti hai', 'Speed pe vibration', 'Ek taraf kheenchti hai'], k: /tyre|tire|wheel|alignment|balanc|puncture|tpms/i },
+    exhaust: { n: 'Exhaust / Fuel', e: '💨', x: 92, y: 71, chips: ['Dhuan nikalta hai', 'Zyada awaaz', 'Mileage gir gaya', 'Petrol ki smell'], k: /exhaust|silencer|catalytic|dpf|fuel|egr|emission|mileage/i },
+  };
+  const ZKEYS = Object.keys(ZONES), xcar = $('#mXcar'), zonesEl = $('#mZones');
+  xcar.insertAdjacentHTML('beforeend', ZKEYS.map(z => '<button type="button" class="mch-pin" data-zone="' + z + '" style="left:' + ZONES[z].x + '%;top:' + ZONES[z].y + '%" aria-label="' + ZONES[z].n + '"><b>' + ZONES[z].e + '</b><span></span></button>').join(''));
+  zonesEl.innerHTML = ZKEYS.map(z => '<button type="button" data-zone="' + z + '"><b>' + ZONES[z].e + '</b> ' + ZONES[z].n + '</button>').join('');
+  function paintZones() {
+    const hot = Object.fromEntries((state.hot || []).map(h => [h.z, h.pct]));
+    $$('[data-zone]', $('#vShop')).forEach(el => {
+      const z = el.dataset.zone, isHot = z in hot;
+      el.classList.toggle('on', state.zone === z); el.classList.toggle('talk', !isHot && (state.talk || []).includes(z)); el.classList.toggle('hot', isHot);
+      const sp = $('span', el); if (sp) sp.textContent = isHot ? ZONES[z].n + (hot[z] ? ' · ' + hot[z] + '%' : '') : ZONES[z].n;
+    });
+    $('#mXhint').textContent = state.hot && state.hot.length ? 'Laal nishaan = yahan problem ho sakti hai 🔴' : (state.zone ? ZONES[state.zone].n + ' chuna — neeche chat mein batao' : 'Jo hissa pareshan kar raha hai, use tap karo 👆');
+  }
+  function zonesFrom(g) {
+    const out = []; const add = (z, pct) => { if (z && ZONES[z] && !out.some(o => o.z === z) && out.length < 3) out.push({ z, pct: pct || 0 }); };
+    const pctFor = z => { const c = (g.causes || []).find(c => ZONES[z].k.test(c.name + ' ' + (c.why || ''))); return c ? c.likelihood : 0; };
+    (g.zones || []).forEach(z => add(z, pctFor(z)));
+    if (!out.length) { (g.causes || []).forEach(c => ZKEYS.forEach(z => { if (ZONES[z].k.test(c.name)) add(z, c.likelihood); })); }
+    if (!out.length) { const t = g.title + ' ' + (g.fix || []).map(f => f.work).join(' '); ZKEYS.forEach(z => { if (ZONES[z].k.test(t)) add(z, 0); }); }
+    return out;
+  }
+  const zoneOf = txt => ZKEYS.find(z => ZONES[z].k.test(txt)) || '';
+  function pickZone(z) {
+    if (busy || !ZONES[z]) return;
+    state.zone = z; paintZones();
+    const m = { role: 'assistant', content: ZONES[z].n + ' mein kya dikkat hai? Neeche se chuno ya apne shabdon mein likho.' };
+    state.msgs.push(m); bubble('assistant', fmtMsg(m.content)); save();
+    setQuick(ZONES[z].chips.concat(['Kuch aur batata hoon']), ZONES[z].n);
+    if (matchMedia('(max-width: 860px)').matches) $('.mch-chat').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  xcar.addEventListener('click', e => { const b = e.target.closest('[data-zone]'); if (b) pickZone(b.dataset.zone); });
+  zonesEl.addEventListener('click', e => { const b = e.target.closest('[data-zone]'); if (b) pickZone(b.dataset.zone); });
+
+  const STARTERS = ['Awaaz aa rahi hai', 'Mileage gir gaya', 'Warning light aayi hai', 'Start nahi ho rahi'];
+  const bubble = (role, html, cls) => { const d = document.createElement('div'); d.className = 'mch-m ' + role + (cls ? ' ' + cls : ''); d.innerHTML = (role === 'assistant' ? '<i class="mch-av" aria-hidden="true">🔧</i>' : '') + '<div class="mch-b">' + html + '</div>'; msgsEl.appendChild(d); msgsEl.scrollTop = msgsEl.scrollHeight; return d; };
   const fmtMsg = s => esc(s).replace(/\n/g, '<br>');
   function renderAll() {
     msgsEl.innerHTML = ''; state.msgs.forEach(m => bubble(m.role, fmtMsg(m.content)));
-    renderNoted(); jobHint();
+    renderNoted(); jobHint(); paintZones();
     if (state.diag) renderDiag(state.diag, true);
     setQuick(state.diag ? ['Naya sawaal poochna hai', 'Nayi problem'] : (state.msgs.length > 1 ? [] : STARTERS));
   }
   function greet() {
     const hi = visitor ? 'Namaste ' + visitor + '! ' : 'Namaste! ';
-    const m = { role: 'assistant', content: hi + 'Main Mechanic Bhai. Gaadi mein kya dikkat hai? Jitna ho sake saaf batao — kab hoti hai, kaisi awaaz ya smell hai. Upar Job Card mein gaadi ki details bhar doge to estimate aur sahi aayega.' };
+    const m = { role: 'assistant', content: hi + 'Main Mechanic Bhai. Gaadi mein kya dikkat hai? Jitna ho sake saaf batao — kab hoti hai, kaisi awaaz ya smell hai. Pehle X-ray par pareshan hissa tap karo, ya seedha likh do. Job Card mein gaadi ki details bhar doge to estimate aur sahi aayega.' };
     state.msgs.push(m); save(); bubble('assistant', fmtMsg(m.content)); setQuick(STARTERS);
   }
-  function setQuick(list) { quickEl.innerHTML = (list || []).map(q => '<button type="button">' + esc(q) + '</button>').join(''); }
+  let quickPre = '';
+  function setQuick(list, pre) { quickPre = pre || ''; quickEl.innerHTML = (list || []).map(q => '<button type="button">' + esc(q) + '</button>').join(''); }
   quickEl.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; const q = b.textContent;
     if (q === 'Nayi problem') return reset();
     if (q === 'Naya sawaal poochna hai') { text.focus(); return; }
-    send(q);
+    if (q === 'Kuch aur batata hoon') { text.value = quickPre + ': '; text.focus(); return; }
+    send(quickPre ? quickPre + ': ' + q : q);
   });
   const typing = () => bubble('assistant', '<span class="mch-dots"><i></i><i></i><i></i></span>', 'typing');
   const leftHint = n => { $('#mLeft').textContent = n > 0 ? n + ' message aaj ke baaki' : 'Aaj ka limit poora'; };
@@ -263,11 +333,13 @@
     const d = r.data;
     state.msgs.push({ role: 'assistant', content: d.reply }); bubble('assistant', fmtMsg(d.reply));
     applyFacts(d.facts); if (typeof d.left === 'number') leftHint(d.left);
-    if (d.diagnosis) { state.diag = d.diagnosis; renderDiag(d.diagnosis); }
+    if (Array.isArray(d.zones) && d.zones.length) state.talk = d.zones;
+    if (d.diagnosis) { if (!d.diagnosis.zones) d.diagnosis.zones = d.zones || []; state.diag = d.diagnosis; state.hot = zonesFrom(d.diagnosis); renderDiag(d.diagnosis); }
+    paintZones();
     save(); setQuick(d.diagnosis ? ['Naya sawaal poochna hai', 'Nayi problem'] : (d.quick_replies || []));
     if (!d.diagnosis) text.focus();
   }
-  function reset() { state = { msgs: [], facts: {}, diag: null }; ss.del('mch_state'); $('#mResult').hidden = true; $('#mResult').innerHTML = ''; renderNoted(); msgsEl.innerHTML = ''; greet(); window.scrollTo({ top: root.offsetTop - 10, behavior: 'smooth' }); }
+  function reset() { state = { msgs: [], facts: {}, diag: null, zone: '', talk: [], hot: [] }; ss.del('mch_state'); $('#mResult').hidden = true; $('#mResult').innerHTML = ''; renderNoted(); paintZones(); msgsEl.innerHTML = ''; greet(); window.scrollTo({ top: root.offsetTop - 10, behavior: 'smooth' }); }
   $('#mReset').addEventListener('click', reset);
 
   // dictation (Chrome/Edge/Safari): optional
@@ -284,23 +356,29 @@
   }
 
   /* ---------- diagnosis card ---------- */
-  const SEV = { low: ['Chal sakti hai', 'Zyada tension nahi — par theek zaroor karwao.', 1], medium: ['Jaldi dikhao', 'Ek-do hafte mein garage dikha do.', 2], high: ['Bahut jaldi dikhao', 'Aise hi zyada mat chalao.', 3], stop: ['Abhi mat chalao', 'Gaadi roko aur tow karwao — safety ka mamla hai.', 4] };
+  const SEV = { low: ['Chal sakti hai', 'Zyada tension nahi — par theek zaroor karwao.', 1, '✔'], medium: ['Jaldi dikhao', 'Ek-do hafte mein garage dikha do.', 2, '⚠'], high: ['Bahut jaldi dikhao', 'Aise hi zyada mat chalao.', 3, '⚠'], stop: ['Abhi mat chalao', 'Gaadi roko aur tow karwao — safety ka mamla hai.', 4, '⛔'] };
   const list = (title, arr, cls) => arr && arr.length ? '<div class="mch-sec ' + (cls || '') + '"><h4>' + title + '</h4><ul>' + arr.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '';
   function renderDiag(g, quiet) {
-    const s = SEV[g.severity] || SEV.medium, el = $('#mResult');
+    const s = SEV[g.severity] || SEV.medium, el = $('#mResult'), hot = state.hot && state.hot.length ? state.hot : zonesFrom(g);
     const causes = (g.causes || []).map(c => '<li><div class="mch-cb"><b>' + esc(c.name) + '</b><span>' + c.likelihood + '%</span></div><div class="mch-bar"><i style="width:' + c.likelihood + '%"></i></div>' + (c.why ? '<small>' + esc(c.why) + '</small>' : '') + '</li>').join('');
-    const rows = (g.fix || []).map(f => '<tr><td><b>' + esc(f.work) + '</b>' + (f.note ? '<small>' + esc(f.note) + '</small>' : '') + '</td><td>' + range(f.parts_min, f.parts_max) + '</td><td>' + range(f.labour_min, f.labour_max) + '</td><td><b>' + range(f.parts_min + f.labour_min, f.parts_max + f.labour_max) + '</b></td></tr>').join('');
-    el.innerHTML = '<div class="mch-sev s' + s[2] + '"><div class="mch-sevbar" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><b>' + s[0] + '</b><span>' + s[1] + '</span></div></div>'
-      + '<h3>' + esc(g.title) + '</h3><p class="mch-summary">' + esc(g.summary) + '</p>'
+    const rows = (g.fix || []).map(f => { const z = zoneOf(f.work); return '<tr><td><b>' + (z ? '<em class="mch-ztag">' + ZONES[z].e + '</em>' : '') + esc(f.work) + '</b>' + (f.note ? '<small>' + esc(f.note) + '</small>' : '') + '</td><td>' + range(f.parts_min, f.parts_max) + '</td><td>' + range(f.labour_min, f.labour_max) + '</td><td><b>' + range(f.parts_min + f.labour_min, f.parts_max + f.labour_max) + '</b></td></tr>'; }).join('');
+    const pm = (g.fix || []).reduce((a, f) => a + (f.parts_min + f.parts_max) / 2, 0), lm = (g.fix || []).reduce((a, f) => a + (f.labour_min + f.labour_max) / 2, 0), pp = pm + lm ? Math.round(pm / (pm + lm) * 100) : 50;
+    const zt = hot.map(h => '<span class="mch-zchip">' + ZONES[h.z].e + ' ' + ZONES[h.z].n + (h.pct ? ' · ' + h.pct + '%' : '') + '</span>').join('');
+    el.innerHTML = '<div class="mch-rhead"><b>SERVICE REPORT</b><span>' + new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + '</span></div>'
+      + '<div class="mch-rtop"><div class="mch-rmain">'
+      + '<div class="mch-sev s' + s[2] + '"><i class="mch-light" aria-hidden="true">' + s[3] + '</i><div><b>' + s[0] + '</b><span>' + s[1] + '</span></div></div>'
+      + '<h3>' + esc(g.title) + '</h3>' + (zt ? '<div class="mch-zchips">' + zt + '</div>' : '') + '<p class="mch-summary">' + esc(g.summary) + '</p></div>'
+      + (rows ? '<div class="mch-cost"><small>Andaazan kharcha</small><b>' + range(g.total_min, g.total_max) + '</b><div class="mch-split" title="Parts vs labour"><i style="width:' + pp + '%"></i></div><div class="mch-splitl"><span>Parts</span><span>Labour</span></div>' + (g.city_note ? '<p>📍 ' + esc(g.city_note) + '</p>' : '') + '</div>' : '')
+      + '</div><div class="mch-rbody">'
       + list('Kyun ho raha hai', g.why)
       + (causes ? '<div class="mch-sec"><h4>Ho sakte hain ye kaaran</h4><ul class="mch-causes">' + causes + '</ul></div>' : '')
       + list('Pehle ye check karo (sasta)', g.confirm_with)
       + list('Abhi kya karein taaki aur na bigde', g.stop_it_now, 'warn')
-      + (rows ? '<div class="mch-sec"><h4>Kaam aur kharcha</h4><div class="mch-tw"><table class="mch-tbl"><thead><tr><th>Kaam</th><th>Parts</th><th>Labour</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="3">Andaazan kul kharcha</td><td><b>' + range(g.total_min, g.total_max) + '</b></td></tr></tfoot></table></div>' + (g.city_note ? '<p class="mch-city">📍 ' + esc(g.city_note) + '</p>' : '') + '</div>' : '')
+      + (rows ? '<div class="mch-sec"><h4>Kaam aur kharcha</h4><div class="mch-tw"><table class="mch-tbl"><thead><tr><th>Kaam</th><th>Parts</th><th>Labour</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="3">Andaazan kul kharcha</td><td><b>' + range(g.total_min, g.total_max) + '</b></td></tr></tfoot></table></div></div>' : '')
       + list('Ye mat karwana', g.avoid, 'bad') + list('Aap khud kar sakte ho', g.diy) + list('Aage se bachne ke liye', g.prevention) + list('Garage mein ye poochho', g.ask_garage)
       + '<p class="mch-disc">' + esc(g.disclaimer) + '</p>'
-      + '<div class="mch-acts"><button type="button" class="mch-btn" id="dDl">⬇ Estimate download karo (PDF)</button><button type="button" class="mch-btn alt" id="dWa">WhatsApp pe bhejo</button><button type="button" class="mch-btn alt" id="dCp">Copy karo</button></div><div class="mch-note" id="dNote" role="status"></div>';
-    el.hidden = false; $('#dDl').onclick = () => printCard(g); $('#dWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(summaryText(g)), '_blank', 'noopener'); $('#dCp').onclick = copyText;
+      + '<div class="mch-acts"><button type="button" class="mch-btn" id="dDl">⬇ Estimate download karo (PDF)</button><button type="button" class="mch-btn alt" id="dWa">WhatsApp pe bhejo</button><button type="button" class="mch-btn alt" id="dCp">Copy karo</button></div><div class="mch-note" id="dNote" role="status"></div></div>';
+    el.hidden = false; paintZones(); $('#dDl').onclick = () => printCard(g); $('#dWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(summaryText(g)), '_blank', 'noopener'); $('#dCp').onclick = copyText;
     if (!quiet) setTimeout(() => el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }), 150);
   }
   const carLine = () => { const p = profile(); return [p.car, p.age && p.age + ' purani', p.km, p.fuel && p.fuel.toUpperCase(), p.city].filter(Boolean).join(' · '); };
