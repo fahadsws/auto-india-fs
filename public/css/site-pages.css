@@ -1030,3 +1030,21 @@ a.btn {
 .mch-acts{display:flex;flex-wrap:wrap;gap:10px}.mch-note{min-height:22px;margin-top:12px;color:var(--mr);font-weight:700;font-size:14px}
 @media(max-width:560px){.mch-hero{padding:24px 16px 32px}.mch-panel{padding:20px 16px}.mch-acts .mch-btn{flex:1 1 100%}.mch-m{max-width:100%}.mch{box-shadow:3px 3px 0 var(--mi)}.mch-left{padding:12px}}
 @media(prefers-reduced-motion:reduce){.mch *,.mch *::after{animation:none!important;transition:none!important}}
+
+/* mobile hardening for the tool pages: grid children may shrink, inputs never set the column's min width */
+.emi-wrap>div,.emi-wrap>aside{min-width:0}
+.rst,.mch{max-width:100%}
+.rst-plate input{width:0}
+.rst input,.rst button,.rst select{max-width:100%}
+@media(max-width:560px){
+  .rst-hero h1{font-size:clamp(25px,8vw,32px)}
+  .rst-plate{height:64px;border-width:3px}.rst-plate i{flex-basis:42px}
+  .rst-plate input{font-size:clamp(18px,6vw,26px);letter-spacing:.03em;padding:0 6px}
+  .rst-chips button,.rst-seg button{font-size:13.5px;padding:8px 12px}
+  .rst-seg{display:grid;grid-template-columns:1fr 1fr 1fr}.rst-seg button{border-radius:12px;padding:9px 4px;text-align:center;line-height:1.2}
+  .rst-btn{width:100%}.rst-acts .rst-btn{flex:1 1 100%}
+  .rst-otp{gap:6px}.rst-otp input{max-width:none;min-width:0;height:50px;font-size:20px}
+  .rst-cardwrap{box-shadow:5px 5px 0 var(--rk)}
+}
+.rst-more{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px}
+@media(max-width:560px){.rst-res{padding-bottom:78px}.rst-more .rst-lnk{font-size:14px}}
