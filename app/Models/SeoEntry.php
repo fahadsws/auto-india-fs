@@ -20,6 +20,7 @@ class SeoEntry extends Model
         'compare' => ['Compare cars', 'compare.index'],
         'emi' => ['Car loan EMI calculator', 'emi'],
         'costperkm' => ['Cost per km calculator', 'costperkm'],
+        'roast' => ['Roast my car', 'roast'],
         'sell' => ['Sell your car', 'sell'],
         'about' => ['About us', 'about'],
         'contact' => ['Contact us', 'contact'],

@@ -99,6 +99,14 @@ class AssistantGuard
         }
     }
 
+    /** Count LLM tokens spent outside the chat (e.g. the roast page) against the same site-wide and per-IP daily budgets. */
+    public static function spend(int $tokens, string $ip): void
+    {
+        if ($tokens <= 0) return;
+        self::bump(self::ipKey($ip), $tokens);
+        self::bump(self::globalKey(), $tokens);
+    }
+
     public static function admitTts(AssistantSession $s, string $text): bool
     {
         self::fresh($s);

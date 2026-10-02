@@ -90,7 +90,7 @@ class KnowledgeBase
     public static function pageIndex(): string
     {
         return Cache::remember('asst:pageindex', 300, function () {
-            $fixed = ['Used cars' => route('cars.index'), 'New cars' => route('newcars.index'), 'Car news' => route('news.index'), 'Compare cars' => route('compare.index'), 'Sell your car' => route('sell'), 'Car EMI calculator' => route('emi'), 'Cost per km calculator' => route('costperkm'), 'Contact' => route('contact'), 'About us' => route('about')];
+            $fixed = ['Used cars' => route('cars.index'), 'New cars' => route('newcars.index'), 'Car news' => route('news.index'), 'Compare cars' => route('compare.index'), 'Sell your car' => route('sell'), 'Car EMI calculator' => route('emi'), 'Cost per km calculator' => route('costperkm'), 'Roast my car' => route('roast'), 'Contact' => route('contact'), 'About us' => route('about')];
             $pages = [];
             try { $pages = \App\Models\Page::published()->orderByDesc('updated_at')->limit(15)->get(['title', 'slug'])->mapWithKeys(fn ($p) => [Str::limit($p->title, 45, '') => url('/'.$p->slug)])->all(); } catch (\Throwable) {}
             return collect($fixed + $pages)->map(fn ($u, $t) => "$t ($u)")->implode('; ');

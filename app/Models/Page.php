@@ -17,7 +17,7 @@ class Page extends Model
 
     /** Paths that already belong to the site and must never be taken by a page slug. */
     public const RESERVED = ['admin', 'cron', 'assistant', 'news', 'new-cars', 'new-bikes', 'new-trucks', 'cars', 'compare', 'videos', 'search', 'lead',
-        'about', 'contact', 'sell-your-car', 'car-emi-calculator', 'cost-per-km-calculator', 'sitemap', 'robots', 'llms', 'feed', 'storage', 'uploads', 'css', 'js', 'img', 'vendor', 'build', 'login', 'logout', 'api'];
+        'about', 'contact', 'sell-your-car', 'car-emi-calculator', 'cost-per-km-calculator', 'roast-my-car', 'sitemap', 'robots', 'llms', 'feed', 'storage', 'uploads', 'css', 'js', 'img', 'vendor', 'build', 'login', 'logout', 'api'];
 
     protected $guarded = [];
     protected $casts = ['faq' => 'array', 'show_lead' => 'boolean', 'show_ads' => 'boolean', 'show_news' => 'boolean', 'published_at' => 'datetime'];
