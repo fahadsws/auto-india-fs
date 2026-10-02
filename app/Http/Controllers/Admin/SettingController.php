@@ -47,6 +47,9 @@ class SettingController extends Controller
                 ['costkm.auto_rate', 'Auto-rickshaw cost (₹/km)', 'number', 'Default 12. The AI line compares the car with the Auto.'],
                 ['costkm.cab_rate', 'Cab cost (₹/km)', 'number', 'Default 16.'],
             ]],
+            'Roast my car' => ['ti-flame', [
+                ['roast.limit_day', 'Roasts per visitor per day', 'number', 'Default 10. Each AI roast costs a few hundred tokens; when the site-wide AI budget is used up, hand-written roasts are shown instead.'],
+            ]],
             'SEO & Tracking' => ['ti-seo', [
                 ['seo.default_description', 'Default meta description', 'textarea', 'Used on pages that have no description of their own.'],
                 ['seo.default_og_image', 'Default social share image URL', 'text', 'Used when a page has no image. 1200×630 recommended.'],
