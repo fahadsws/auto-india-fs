@@ -32,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
 
         \Illuminate\Support\Facades\RateLimiter::for('roast', fn (\Illuminate\Http\Request $r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(6)->by($r->ip().'|'.substr((string) $r->header('X-Assistant-Token'), 0, 12)));
 
+        \Illuminate\Support\Facades\RateLimiter::for('mechanic', fn (\Illuminate\Http\Request $r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(12)->by($r->ip().'|'.substr((string) $r->header('X-Assistant-Token'), 0, 12)));
+
         Paginator::useBootstrapFive();
 
         // Laravel 12.x ships a built-in @context directive that would swallow the "@context" key of our JSON-LD

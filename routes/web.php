@@ -38,6 +38,8 @@ Route::get('/car-emi-calculator', [Site\CalculatorController::class, 'emi'])->na
 Route::get('/cost-per-km-calculator', [Site\CalculatorController::class, 'costPerKm'])->name('costperkm');
 Route::get('/roast-my-car', [Site\RoastController::class, 'page'])->name('roast');
 Route::post('/roast-my-car/roast', [Site\RoastController::class, 'roast'])->middleware(['throttle:roast', 'assistant.session'])->name('roast.run');
+Route::get('/online-mechanic', [Site\MechanicController::class, 'page'])->name('mechanic');
+Route::post('/online-mechanic/chat', [Site\MechanicController::class, 'chat'])->middleware(['throttle:mechanic', 'assistant.session'])->name('mechanic.chat');
 Route::get('/sell-your-car', [Site\PageController::class, 'sell'])->name('sell');
 Route::post('/sell-your-car', [Site\PageController::class, 'sellSubmit'])->middleware('throttle:6,1')->name('sell.submit');
 Route::get('/sitemap.xml', [Site\PageController::class, 'sitemap'])->name('sitemap');
