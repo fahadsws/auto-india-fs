@@ -107,4 +107,30 @@ class RoastTest extends TestCase
         $this->postJson('/roast-my-car/roast', $this->body(), $h)->assertOk();
         $this->postJson('/roast-my-car/roast', $this->body(), $h)->assertStatus(429);
     }
+
+    public function test_number_plate_is_cleaned_returned_and_used(): void
+    {
+        $h = $this->verified();
+        $this->postJson('/roast-my-car/roast', $this->body(['plate' => 'mh 12  ab-123']), $h)->assertOk()->assertJsonPath('card.plate', 'MH 12 AB-123');
+        $this->postJson('/roast-my-car/roast', $this->body(['plate' => 'MH12@#']), $h)->assertStatus(422);
+        $this->postJson('/roast-my-car/roast', $this->body(['plate' => str_repeat('A', 14)]), $h)->assertStatus(422);
+        $this->postJson('/roast-my-car/roast', $this->body(['plate' => 'MADARCHOD']), $h)->assertOk()->assertJsonPath('card.plate', '');
+        $this->postJson('/roast-my-car/roast', $this->body(), $h)->assertOk()->assertJsonPath('card.plate', '');
+    }
+
+    public function test_plate_and_aura_fallbacks_are_clean_and_use_fear_meter(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            foreach (['aura' => 'aura', 'roast' => 'hatch'] as $mode => $type) {
+                $c = Roast::fallback($mode, $type, 'x', ['ac24'], 'DL 8C AB 0007');
+                $this->assertFalse(Roast::isUnsafe(json_encode($c, JSON_UNESCAPED_UNICODE)));
+                $this->assertStringContainsString('DL 8C AB 0007', implode(' ', $c['lines']));
+                if ($mode === 'aura') $this->assertContains($c['score']['label'], ['Khauf Level', 'Dar Meter']);
+            }
+        }
+        $p = Roast::prompt('aura', 'aura', 'Thar', 'medium', 'x', [], '', 'MH 12 AB 0007');
+        $this->assertStringContainsString('POWER + FEAR', $p[1]['content']);
+        $this->assertStringContainsString('FANCY', $p[1]['content']);
+        $this->assertStringNotContainsString('MH', str_replace('MH 12 AB 0007', '', $p[1]['content']));
+    }
 }

@@ -922,3 +922,7 @@ a.btn {
 .rst-more{margin-top:8px;font-size:14px}
 @media(prefers-reduced-motion:reduce){.rst *{animation:none!important;transition:none!important}}
 @media(max-width:560px){.rst{box-shadow:4px 4px 0 var(--rk)}.rst-panel,.rst-res{padding:20px 16px}.rst-hero{padding:0 16px 22px}.rst-tape{margin:0 -16px 20px}.rst-acts .rst-btn{flex:1 1 100%}}
+.rst-sl{display:block;font-weight:700;font-size:13px;margin:0 0 7px}.rst-sl em{font-style:normal;font-weight:500;color:var(--rm)}
+.rst-plate+.rst-sl{margin-top:18px}
+.rst-car{width:100%;height:48px;border:2px solid var(--rk);background:#fffaf0;border-radius:6px;padding:0 14px;font:inherit;font-size:16px;font-weight:600;color:var(--rk)}
+.rst-car:focus{outline:0;box-shadow:0 0 0 3px #ffd23f}.rst-car::placeholder{color:#a79f85;font-weight:500}
