@@ -76,9 +76,25 @@ class PageController extends Controller
             'body' => 'nullable|string',
             'featured_image_url' => 'nullable|string|max:500',
             'image' => 'nullable|image|max:5120',
-        ] + \App\Support\SeoRules::rules(), ['slug.not_in' => 'That URL is used by the site already. Choose another slug.', 'slug.regex' => 'Slug may only contain lowercase letters, numbers and hyphens.']);
+            'meta_title' => 'nullable|string|max:120',
+            'meta_description' => 'nullable|string|max:320',
+            'meta_keywords' => 'nullable|string|max:300',
+            'canonical_url' => 'nullable|url|max:500',
+            'robots' => ['required', Rule::in(array_keys(Page::ROBOTS))],
+            'og_title' => 'nullable|string|max:160',
+            'og_description' => 'nullable|string|max:320',
+            'og_image' => 'nullable|string|max:500',
+            'schema_type' => ['required', Rule::in(array_keys(Page::SCHEMA_TYPES))],
+            'schema_json' => 'nullable|string|max:20000',
+            'faq' => 'nullable|array|max:50',
+            'faq.*.q' => 'nullable|string|max:300',
+            'faq.*.a' => 'nullable|string|max:3000',
+        ], ['slug.not_in' => 'That URL is used by the site already. Choose another slug.', 'slug.regex' => 'Slug may only contain lowercase letters, numbers and hyphens.']);
 
-        if ($err = \App\Support\SeoRules::schemaError($d)) return back()->withInput()->withErrors(['schema_json' => $err]);
+        if (filled($d['schema_json'] ?? null)) {
+            json_decode($d['schema_json']);
+            if (json_last_error() !== JSON_ERROR_NONE) return back()->withInput()->withErrors(['schema_json' => 'Custom schema is not valid JSON: '.json_last_error_msg()]);
+        }
 
         $image = $page->featured_image;
         if ($r->hasFile('image')) {
@@ -93,13 +109,20 @@ class PageController extends Controller
             $image = null;
         }
 
+        $faq = collect($d['faq'] ?? [])->filter(fn ($f) => filled($f['q'] ?? null) && filled($f['a'] ?? null))
+            ->map(fn ($f) => ['q' => trim($f['q']), 'a' => trim($f['a'])])->values()->all();
+
         $publishing = $d['status'] === 'published';
         $page->fill([
             'title' => $d['title'], 'slug' => $d['slug'], 'template' => $d['template'], 'status' => $d['status'],
             'published_at' => $d['published_at'] ?? null ?: ($publishing ? ($page->published_at ?? now()) : null),
             'excerpt' => $d['excerpt'] ?? null, 'body' => $d['body'] ?? null, 'featured_image' => $image,
+            'meta_title' => $d['meta_title'] ?? null, 'meta_description' => $d['meta_description'] ?? null, 'meta_keywords' => $d['meta_keywords'] ?? null,
+            'canonical_url' => $d['canonical_url'] ?? null, 'robots' => $d['robots'],
+            'og_title' => $d['og_title'] ?? null, 'og_description' => $d['og_description'] ?? null, 'og_image' => $d['og_image'] ?? null,
+            'schema_type' => $d['schema_type'], 'schema_json' => $d['schema_json'] ?? null, 'faq' => $faq,
             'show_lead' => $r->boolean('show_lead'), 'show_ads' => $r->boolean('show_ads'), 'show_news' => $r->boolean('show_news'),
-        ] + \App\Support\SeoRules::attributes($d))->save();
+        ])->save();
 
         return redirect()->route('admin.pages.edit', $page)->with('success', $msg);
     }

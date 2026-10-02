@@ -64,9 +64,10 @@ class PageController extends Controller
             'phone' => ['required', 'regex:/^[+0-9 \-]{8,15}$/'],
             'city' => 'required|string|max:80',
             'emi_context' => 'nullable|string|max:200',
+            'calc_label' => 'nullable|in:Cost per km',
         ]);
         $page = parse_url((string) url()->previous(), PHP_URL_PATH) ?: '/';
-        $emi = $r->filled('emi_context') ? ' EMI calc: '.preg_replace('/[^\w\s.,:₹%@\/()+-]/u', '', $data['emi_context']).'.' : '';
+        $emi = $r->filled('emi_context') ? ' '.($data['calc_label'] ?? 'EMI calc').': '.preg_replace('/[^\w\s.,:₹%@\/()+-]/u', '', $data['emi_context']).'.' : '';
         $lead = Lead::create([
             'name' => $data['name'], 'phone' => $data['phone'], 'type' => 'enquiry', 'ip' => $r->ip(),
             'message' => "Best-offer request. City: {$data['city']}.{$emi} From page: {$page}",
@@ -125,6 +126,7 @@ class PageController extends Controller
             '- [Used cars]('.route('cars.index').'): used-car listings with enquiry',
             '- [Videos]('.route('videos.index').'): car review and launch videos',
             '- [Car loan EMI calculator]('.route('emi').'): free car loan EMI calculator with interest and total payable',
+            '- [Cost per km calculator]('.route('costperkm').'): real running cost of a car per km - fuel, EMI, service and insurance',
             '- [Sitemap]('.route('sitemap').')', '', '## New car models'];
         foreach (\App\Models\VehicleModel::published()->orderByDesc('updated_at')->take(60)->get() as $c) $lines[] = "- [{$c->full_name}]({$c->url}): {$c->status_label}. {$c->price_label}";
         $pages = \App\Models\Page::published()->where('robots', 'not like', 'noindex%')->orderBy('title')->take(100)->get();

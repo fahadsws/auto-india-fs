@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Article;
 use App\Models\HomeSetting;
 use App\Models\Setting;
+use App\Models\VehicleModel;
+use App\Services\CostPerKm;
 
 class CalculatorController extends Controller
 {
@@ -26,6 +28,32 @@ class CalculatorController extends Controller
 
         return view('site.emi', [
             'cfg' => $cfg,
+            'homeSettings' => HomeSetting::current(),
+            'latest' => Article::published()->latest('published_at')->take(5)->get(),
+        ]);
+    }
+
+    /** Cost-per-km page. Fuel cost comes from km + average (asked from the visitor), never typed in. */
+    public function costPerKm()
+    {
+        $cfg = CostPerKm::config();
+        $rate = min(max((float) Setting::get('emi.default_rate', 10), 1), 30);
+
+        // Cars the visitor can pick: average (parsed from the specs "Mileage" text), fuel and a rough EMI come prefilled, all editable.
+        $cars = VehicleModel::published()->ofType('car')->with(['brandMaster:id,name', 'fuels:id,name'])->orderBy('name')->limit(300)->get()->map(function ($m) use ($rate) {
+            $fuel = collect($m->fuels->pluck('name'))->map(fn ($n) => str_contains(strtolower($n), 'electric') ? 'electric' : (str_contains(strtolower($n), 'cng') ? 'cng' : (str_contains(strtolower($n), 'diesel') ? 'diesel' : 'petrol')))->first() ?? 'petrol';
+            $avg = null;
+            foreach (array_change_key_case((array) $m->specs, CASE_LOWER) as $k => $v) {
+                if (preg_match('/mileage|arai|average|efficiency/', $k) && preg_match('/\d+(?:\.\d+)?/', (string) $v, $x) && (float) $x[0] >= 3 && (float) $x[0] <= 60) { $avg = (float) $x[0]; break; }
+            }
+            $loan = $m->price_min * 0.9; $r = $rate / 1200; $n = 60;                             // rough: 90% loan, 5 years
+            $emi = $loan > 0 ? round(($r ? $loan * $r * (1 + $r) ** $n / ((1 + $r) ** $n - 1) : $loan / $n) / 100) * 100 : null;
+            return ['id' => $m->id, 'name' => $m->full_name, 'fuel' => $fuel, 'average' => $avg, 'emi' => $emi];
+        })->values();
+
+        return view('site.costperkm', [
+            'cfg' => $cfg,
+            'cars' => $cars,
             'homeSettings' => HomeSetting::current(),
             'latest' => Article::published()->latest('published_at')->take(5)->get(),
         ]);

@@ -25,8 +25,6 @@ class NewCarController extends Controller
             ->when($r->fuel, fn ($x, $fuels) => $x->whereHas('fuels', fn ($f) => $f->whereIn('vehicle_fuels.id', (array) $fuels)))
             ->when($r->q, fn ($x, $s) => $x->where(fn ($w) => $w->where('name', 'like', "%$s%")->orWhereHas('brandMaster', fn ($b) => $b->where('name', 'like', "%$s%"))))
             ->tap(fn ($x) => \App\Support\Filters::applyBudget($x, 'price_min', $r->budget, $vehicle))
-            ->when($r->filled('price_max'), fn ($x) => $x->where('price_min', '>', 0)->where('price_min', '<=', (int) $r->price_max))
-            ->when($r->filled('price_min'), fn ($x) => $x->where(fn ($w) => $w->where('price_min', '>=', (int) $r->price_min)->orWhere('price_max', '>=', (int) $r->price_min)))
             ->orderByDesc('latest_event_at')->orderByDesc('updated_at');
 
         $bc = $base()->selectRaw('brand_id, count(*) n')->groupBy('brand_id')->pluck('n', 'brand_id');

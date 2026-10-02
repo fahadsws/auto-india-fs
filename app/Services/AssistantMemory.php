@@ -19,7 +19,7 @@ class AssistantMemory
 
     public static function get(AssistantSession $s): array
     {
-        return ($s->memory ?: []) + ['f' => [], 'shown' => [], 'focus' => null, 'stage' => 'discover', 'ask' => null, 'asked' => [], 'booked' => [], 'flow' => null, 'cid' => null, 'turns' => 0, 'synced' => ''];
+        return ($s->memory ?: []) + ['f' => [], 'shown' => [], 'focus' => null, 'stage' => 'discover', 'ask' => null, 'asked' => [], 'booked' => [], 'flow' => null, 'turns' => 0, 'synced' => ''];
     }
 
     /** Memory is a convenience: if the column is missing (migration not run yet) chat keeps working without it. */
@@ -66,10 +66,14 @@ class AssistantMemory
         }
         if (preg_match('/\b(last|aakhri|aakhiri)\b/', $t) && $shown) return end($shown);
 
-        $words = collect(preg_split('/[^\p{L}\p{N}]+/u', $t, -1, PREG_SPLIT_NO_EMPTY))->filter(fn ($w) => mb_strlen($w) >= 4 && ! in_array($w, ['test', 'drive', 'book', 'inspection', 'karna', 'karni', 'chahiye', 'wali', 'wala', 'cars', 'used', 'diesel', 'petrol', 'manual', 'automatic', 'show', 'dikhao'], true));
-        foreach (array_merge($m['focus'] ? [$m['focus']] : [], $shown) as $item) {
-            $title = Str::lower($item['t'] ?? '');
-            if ($words->contains(fn ($w) => str_contains($title, $w))) return $item;
+        // A car is referred to by its NAME ("creta wali"): a whole word of its title, never a brand ("tata"), a year or a filter word.
+        $brands = SiteData::brandWords();
+        $skip = ['test', 'drive', 'book', 'inspection', 'karna', 'karni', 'chahiye', 'wali', 'wala', 'cars', 'used', 'diesel', 'petrol', 'manual', 'automatic', 'show', 'dikhao', 'price', 'news'];
+        $words = collect(QueryIntent::tokens($t))->filter(fn ($w) => mb_strlen($w) >= 3 && ! ctype_digit($w) && ! in_array($w, $skip, true) && ! in_array($w, $brands, true));
+        if ($words->isNotEmpty()) {
+            foreach (array_merge($m['focus'] ? [$m['focus']] : [], $shown) as $item) {
+                if ($words->contains(fn ($w) => in_array($w, QueryIntent::tokens($item['t'] ?? ''), true))) return $item;
+            }
         }
         if (preg_match('/\b(this|this one|that one|ye wali|yeh wali|ye wala|yeh wala|isko|isse|yahi|wahi|same one|ise)\b/', $t)) {
             if ($m['focus']) return $m['focus'];
@@ -95,6 +99,9 @@ class AssistantMemory
         if ($look) $lines[] = 'Wants: '.implode(', ', $look).'.';
         if (! empty($m['shown'])) $lines[] = 'Shown: '.collect($m['shown'])->map(fn ($x, $i) => ($i + 1).') '.$x['t'].($x['p'] ? ' '.$x['p'] : ''))->implode('; ').'.';
         if (! empty($m['focus'])) $lines[] = 'Selected car: '.$m['focus']['t'].($m['focus']['p'] ? ' '.$m['focus']['p'] : '').'.';
+        if (! empty($m['topic'])) $lines[] = 'Last topic we discussed ("this"/"iska" may mean it): '.$m['topic'].'.';
+        if (! empty($m['flow'])) $lines[] = 'In progress: collecting a '.str_replace('_', ' ', $m['flow']['kind']).' request'.($m['flow']['car'] ? ' for '.$m['flow']['car'] : '').' - continue it only while the visitor is on it; if they asked something else, answer that first and drop the request unless they return to it.';
+        if (! empty($m['missing'])) $lines[] = 'Still missing to save the request: '.implode(', ', $m['missing']).' - ask for it naturally.';
         if (! empty($m['booked'])) $lines[] = 'Already booked: '.collect($m['booked'])->map(fn ($b) => str_replace('_', ' ', $b['kind']).' for '.$b['t'].' on '.$b['date'].' (ref '.$b['ref'].')')->implode('; ').'.';
         return implode(' ', $lines);
     }

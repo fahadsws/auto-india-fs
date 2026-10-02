@@ -34,9 +34,6 @@ class HindiText
         'कहीं भी' => 'anywhere', 'कहीं' => 'anywhere', 'कोई भी' => 'any', 'कोई सीमा नहीं' => 'no limit', 'कोई लिमिट नहीं' => 'no limit',
         'नमस्ते' => 'namaste', 'नमस्कार' => 'namaskar', 'धन्यवाद' => 'dhanyavad', 'शुक्रिया' => 'shukriya', 'हाँ' => 'haan', 'हां' => 'haan', 'नहीं' => 'nahi',
         'पता' => 'address', 'संपर्क' => 'contact', 'नंबर' => 'phone', 'समय' => 'timings', 'सेवाएं' => 'services', 'ऑफर' => 'offers', 'वारंटी' => 'warranty', 'बीमा' => 'insurance', 'शोरूम' => 'showroom', 'डीलर' => 'dealer',
-        'पेज' => 'page', 'ले जाओ' => 'le jao', 'ले चलो' => 'le chalo', 'खोलो' => 'kholo', 'खोलिए' => 'kholo', 'डिटेल्स' => 'details', 'डिटेल' => 'detail', 'लिंक' => 'link', 'इसके' => 'iske', 'इसकी' => 'iski', 'इसका' => 'iska',
-        'इनफार्मेशन' => 'information', 'इन्फॉर्मेशन' => 'information', 'इन्फोर्मेशन' => 'information', 'जानकारी' => 'information', 'शेयर' => 'share',
-        'ओपन' => 'open', 'ओपेन' => 'open', 'कंपैरिजन' => 'comparison', 'कम्पैरिजन' => 'comparison', 'कंपेरिजन' => 'comparison', 'कम्पेरिज़न' => 'comparison', 'बनाम' => 'vs', 'फर्क' => 'difference', 'अंतर' => 'difference', 'वेन्यू' => 'Venue', 'सिएरा' => 'Sierra', 'हैरियर' => 'Harrier',
         'समाचार' => 'news', 'ख़बर' => 'news', 'खबर' => 'news', 'वीडियो' => 'video', 'तुलना' => 'compare', 'ब्रोशर' => 'brochure',
         // cities
         'दिल्ली' => 'Delhi', 'मुंबई' => 'Mumbai', 'मुम्बई' => 'Mumbai', 'बेंगलुरु' => 'Bengaluru', 'बैंगलोर' => 'Bengaluru', 'बेंगलूरु' => 'Bengaluru', 'चेन्नई' => 'Chennai', 'हैदराबाद' => 'Hyderabad',
@@ -50,30 +47,6 @@ class HindiText
         'क्रेटा' => 'Creta', 'ब्रेज़ा' => 'Brezza', 'ब्रेजा' => 'Brezza', 'नेक्सॉन' => 'Nexon', 'स्विफ्ट' => 'Swift', 'बलेनो' => 'Baleno', 'वैगनआर' => 'WagonR', 'फॉर्च्यूनर' => 'Fortuner', 'स्कॉर्पियो' => 'Scorpio', 'थार' => 'Thar', 'पंच' => 'Punch', 'इनोवा' => 'Innova', 'वेन्यू' => 'Venue', 'सेल्टोस' => 'Seltos', 'अल्टो' => 'Alto', 'डिजायर' => 'Dzire', 'डिज़ायर' => 'Dzire', 'एक्सयूवी' => 'XUV',
     ];
 
-    /** @var array<string,string> NFC-normalised phrase => English word */
-    private static array $nfcMap = [];
-
-    /** Composed (ड़) and decomposed (ड + nukta) Devanagari must match the same word. */
-    private static function nfc(string $s): string
-    {
-        return class_exists(\Normalizer::class) ? (\Normalizer::normalize($s, \Normalizer::FORM_C) ?: $s) : $s;
-    }
-
-    private const CONS = ['क' => 'k', 'ख' => 'k', 'ग' => 'g', 'घ' => 'g', 'च' => 'c', 'छ' => 'c', 'ज' => 'j', 'झ' => 'j', 'ट' => 't', 'ठ' => 't', 'ड' => 'd', 'ढ' => 'd', 'ण' => 'n', 'त' => 't', 'थ' => 't', 'द' => 'd', 'ध' => 'd', 'न' => 'n',
-        'प' => 'p', 'फ' => 'f', 'ब' => 'b', 'भ' => 'b', 'म' => 'm', 'य' => 'y', 'र' => 'r', 'ल' => 'l', 'व' => 'v', 'श' => 's', 'ष' => 's', 'स' => 's', 'ह' => 'h', 'ळ' => 'l'];
-
-    /** Rough Devanagari -> Latin (consonants matter, vowels are 'a'): enough to compare a spoken car name with the catalog. */
-    public static function latinize(string $word): string
-    {
-        $out = '';
-        foreach (preg_split('//u', self::nfc($word), -1, PREG_SPLIT_NO_EMPTY) as $ch) {
-            if (isset(self::CONS[$ch])) $out .= self::CONS[$ch];
-            elseif (preg_match('/[\x{0904}-\x{0914}\x{093E}-\x{094C}]/u', $ch)) $out .= 'a';
-            elseif (preg_match('/[A-Za-z0-9]/', $ch)) $out .= strtolower($ch);
-        }
-        return $out;
-    }
-
     public static function has(string $text): bool
     {
         return (bool) preg_match('/[\x{0900}-\x{097F}]/u', $text);
@@ -83,15 +56,14 @@ class HindiText
     public static function normalize(string $text): string
     {
         if (! self::has($text)) return $text;
-        $t = strtr(self::nfc($text), self::DIGITS);
+        $t = strtr($text, self::DIGITS);
         static $re = null;
         if ($re === null) {
             $keys = array_keys(self::WORDS);
             usort($keys, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
-            $re = '/(?<![\p{L}\p{M}])(?:'.implode('|', array_map(fn ($k) => preg_quote(self::nfc($k), '/'), $keys)).')(?![\p{L}\p{M}])/u';
-            foreach (self::WORDS as $k => $v) self::$nfcMap[self::nfc($k)] = $v;
+            $re = '/(?<![\p{L}\p{M}])(?:'.implode('|', array_map(fn ($k) => preg_quote($k, '/'), $keys)).')(?![\p{L}\p{M}])/u';
         }
-        $t = preg_replace_callback($re, fn ($m) => ' '.(self::$nfcMap[$m[0]] ?? '').' ', $t);
+        $t = preg_replace_callback($re, fn ($m) => ' '.self::WORDS[$m[0]].' ', $t);
         $t = preg_replace('/(\d)\s*से\s*(\d)/u', '$1 to $2', $t);                                                  // "5 से 8 lakh"
         $t = preg_replace('/(\d+(?:\.\d+)?\s*(?:lakh|crore|thousand|k|km))\s+under\b/u', 'under $1', $t);        // "8 lakh under" -> "under 8 lakh"
         return trim(preg_replace('/\s+/u', ' ', $t));

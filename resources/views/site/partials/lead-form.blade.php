@@ -8,6 +8,7 @@
             @csrf
             <input type="text" name="website" class="fx-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
             @isset($emiContext)<input type="hidden" name="emi_context" id="emiContext" value="">@endisset
+            @isset($calcLabel)<input type="hidden" name="calc_label" value="{{ $calcLabel }}">@endisset
             <input name="name" value="{{ old('name') }}" placeholder="Your name" required maxlength="120" autocomplete="name">
             <input name="phone" type="tel" inputmode="tel" value="{{ old('phone') }}" placeholder="Mobile number" required
                 pattern="[+0-9 \-]{8,15}" autocomplete="tel">

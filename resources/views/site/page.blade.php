@@ -17,7 +17,20 @@
 @if ($page->og_description)@section('og_description', $page->og_description)@endif
 
 @push('head')
-@include('site.partials.seo-jsonld', ['m' => $page, 'name' => $page->title, 'url' => $page->url, 'desc' => $desc, 'image' => $image, 'crumb' => $page->title])
+@if ($page->schema_type !== 'None')
+<script type="application/ld+json">{!! json_encode(array_filter(['@context' => 'https://schema.org', '@type' => $page->schema_type === 'FAQPage' ? 'WebPage' : $page->schema_type,
+  ($page->schema_type === 'Article' ? 'headline' : 'name') => $page->title, 'description' => $desc, 'url' => $page->url, 'image' => $image,
+  'datePublished' => $page->schema_type === 'Article' ? $page->published_at?->toIso8601String() : null, 'dateModified' => $page->schema_type === 'Article' ? $page->updated_at?->toIso8601String() : null,
+  'author' => $page->schema_type === 'Article' ? ['@type' => 'Organization', 'name' => $siteName] : null,
+  'provider' => $page->schema_type === 'Service' ? ['@type' => 'Organization', 'name' => $siteName] : null]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+@endif
+@if ($faqItems)
+<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => collect($faqItems)->map(fn ($f) => ['@type' => 'Question', 'name' => $f['q'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f['a']]])->all()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+@endif
+<script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => route('home')], ['@type' => 'ListItem', 'position' => 2, 'name' => $page->title, 'item' => $page->url]]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+@if (filled($page->schema_json) && ($custom = json_decode($page->schema_json, true)) !== null)
+<script type="application/ld+json">{!! json_encode($custom, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+@endif
 @endpush
 
 @section('content')

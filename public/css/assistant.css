@@ -182,9 +182,3 @@ html[data-theme=dark] .aw-btn{background:#fff;color:#000}
   .aw-page .aw-panel{height:78dvh;border-radius:22px}
 }
 @media (prefers-reduced-motion:reduce){.aw *,.aw *::before,.aw *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-/* actions the assistant offers (open the full list / page) and links inside replies */
-.aw-go{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:999px;background:linear-gradient(135deg,var(--aw-pri),var(--aw-pri2));color:#fff;font:600 13px var(--f,sans-serif);text-decoration:none;margin:2px 0;animation:aw-msg .4s both}
-.aw-go:hover{filter:brightness(1.08)}
-.aw-msg a{color:var(--aw-pri);text-decoration:underline;word-break:break-all}
-.aw-price{display:block;font-weight:700;color:var(--aw-pri);margin-top:2px}
-.aw-mic.resume{background:var(--aw-pri);color:#fff;animation:aw-ring2 1.6s infinite}

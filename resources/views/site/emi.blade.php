@@ -49,6 +49,7 @@
     <div class="prose">
       <h2>How to use the car loan EMI calculator</h2>
       <p>Move the sliders or type exact values for the loan amount, interest rate and tenure. The EMI, total interest and total payable update instantly, so you can compare different loan options before you visit a dealership.</p>
+      <p>Wondering what the car will really cost to run? Try the <a href="{{ route('costperkm') }}">cost per km calculator</a> — it adds fuel, service and insurance to your EMI.</p>
     </div>
     <h2 style="margin-top:28px">Frequently asked questions</h2>
     @foreach ($faq as $f)<details class="aside-box" style="padding:14px 18px;margin-bottom:10px"><summary style="font-weight:700;cursor:pointer">{{ $f['q'] }}</summary><p class="m" style="margin:10px 0 0">{{ $f['a'] }}</p></details>@endforeach

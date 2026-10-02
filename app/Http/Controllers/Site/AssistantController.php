@@ -21,7 +21,6 @@ class AssistantController extends Controller
             'history.*.role' => 'in:user,assistant',
             'history.*.content' => 'string|max:1200',
             'voice' => 'nullable|boolean',
-            'cid' => 'nullable|string|max:40',
         ]);
         $s = $r->attributes->get('assistant_session');
 
@@ -34,7 +33,7 @@ class AssistantController extends Controller
             if (! $verdict['allow']) {
                 return response()->json(['message' => $verdict['message'], 'reason' => $verdict['reason'], 'retry_after' => $verdict['retry_after']], 429);
             }
-            return response()->json($assistant->reply($d['message'], $d['history'] ?? [], $s, (string) $r->ip(), (bool) ($d['voice'] ?? false), $verdict['degraded'], $d['cid'] ?? null));
+            return response()->json($assistant->reply($d['message'], $d['history'] ?? [], $s, (string) $r->ip(), (bool) ($d['voice'] ?? false), $verdict['degraded']));
         } finally {
             $lock->release();
         }

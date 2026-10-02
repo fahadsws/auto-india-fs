@@ -78,17 +78,6 @@
             @include('site.partials.bubble')
             <h3 id="agHello">Hello there!</h3>
             <p class="aw-sub">{{ $greeting }}</p>
-            <div class="aw-promo" id="agPromo" aria-label="Highlights">
-              @foreach ($promos as [$t, $d, $u, $c])<a class="aw-slide {{ $c }} {{ $loop->first ? 'on' : '' }}" href="{{ $u }}"><b>{{ $t }}</b><span>{{ $d }}</span><i class="ti ti-arrow-up-right"></i></a>@endforeach
-              <div class="aw-dots">@foreach ($promos as $p)<i class="{{ $loop->first ? 'on' : '' }}"></i>@endforeach</div>
-            </div>
-            <p class="aw-hint">Tap on any of the below or type your query in the chat box</p>
-            <div class="aw-chips" id="agSuggest">
-              @foreach ($chips as [$label, $icon, $type, $val])
-                @if ($type === 'link')<a class="aw-chip" href="{{ $val }}" style="--i:{{ $loop->index }}"><i class="ti {{ $icon }}"></i><span>{{ $label }}</span></a>
-                @else<button type="button" class="aw-chip" data-q="{{ $val }}" style="--i:{{ $loop->index }}"><i class="ti {{ $icon }}"></i><span>{{ $label }}</span></button>@endif
-              @endforeach
-            </div>
           </div>
         </div>
         <div class="aw-status" id="agStatus"></div>

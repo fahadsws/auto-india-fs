@@ -26,7 +26,9 @@ class KnowledgeBase
         if (! $data) { self::forget($m); return; }
         $data['url'] = self::relative($data['url'] ?? null);
         $data['image'] = self::relative($data['image'] ?? null);
-        KnowledgeChunk::updateOrCreate(['type' => $type, 'ref_id' => $m->getKey()], $data);
+        $chunk = KnowledgeChunk::updateOrCreate(['type' => $type, 'ref_id' => $m->getKey()], $data);
+        if (! $chunk->wasRecentlyCreated && ! $chunk->wasChanged()) $chunk->touch();   // marks it as seen by reindexAll()
+        if ($m instanceof \App\Models\VehicleModel) Cache::forget('asst:modelidx');
     }
 
     /** Store site URLs without the domain so they survive domain/APP_URL changes. */
@@ -44,18 +46,23 @@ class KnowledgeBase
     public static function forget(Model $m): void
     {
         KnowledgeChunk::where('type', $m::knowledgeType())->where('ref_id', $m->getKey())->delete();
+        if ($m instanceof \App\Models\VehicleModel) Cache::forget('asst:modelidx');
     }
 
     public static function reindexAll(): int
     {
-        KnowledgeChunk::query()->delete();
+        // Rebuild in place: the knowledge is never empty while this runs. Chunks not re-saved below are stale and removed at the end.
+        $started = now()->startOfSecond();
         $n = 0;
         Article::published()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         Listing::active()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         Video::active()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         \App\Models\VehicleModel::published()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
+        \App\Models\CarComparison::query()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         \App\Models\Page::published()->chunkById(200, function ($rows) use (&$n) { foreach ($rows as $r) { self::sync($r); $n++; } });
         self::syncSiteInfo();
+        KnowledgeChunk::where('updated_at', '<', $started)->delete();
+        Cache::forget('asst:modelidx');
         return $n + 1;
     }
 
@@ -83,32 +90,89 @@ class KnowledgeBase
     public static function pageIndex(): string
     {
         return Cache::remember('asst:pageindex', 300, function () {
-            $fixed = ['Used cars' => route('cars.index'), 'New cars' => route('newcars.index'), 'Car news' => route('news.index'), 'Compare cars' => route('compare.index'), 'Sell your car' => route('sell'), 'Car EMI calculator' => route('emi'), 'Contact' => route('contact'), 'About us' => route('about')];
+            $fixed = ['Used cars' => route('cars.index'), 'New cars' => route('newcars.index'), 'Car news' => route('news.index'), 'Compare cars' => route('compare.index'), 'Sell your car' => route('sell'), 'Car EMI calculator' => route('emi'), 'Cost per km calculator' => route('costperkm'), 'Contact' => route('contact'), 'About us' => route('about')];
             $pages = [];
             try { $pages = \App\Models\Page::published()->orderByDesc('updated_at')->limit(15)->get(['title', 'slug'])->mapWithKeys(fn ($p) => [Str::limit($p->title, 45, '') => url('/'.$p->slug)])->all(); } catch (\Throwable) {}
             return collect($fixed + $pages)->map(fn ($u, $t) => "$t ($u)")->implode('; ');
         });
     }
 
-    /** @return \Illuminate\Support\Collection<int, KnowledgeChunk> */
+    /** Distinct words (4+ letters) used in knowledge titles: model, brand and topic names as OUR content spells them. Cached briefly. */
+    private static function vocabulary(): array
+    {
+        return Cache::remember('asst:vocab', 600, function () {
+            $words = [];
+            KnowledgeChunk::query()->select('title')->orderByDesc('id')->limit(5000)->pluck('title')->each(function ($t) use (&$words) {
+                foreach (QueryIntent::tokens((string) $t) as $w) if (mb_strlen($w) >= 4 && ! ctype_digit($w)) $words[$w] = ($words[$w] ?? 0) + 1;
+            });
+            return $words;
+        });
+    }
+
+    /**
+     * Fix misspelled / misheard names ("jeyout" -> "jetour", "siera" -> "sierra") by snapping a word that appears nowhere in our titles
+     * to the closest title word (same first letter, 1-2 letters off). Words that are already spelled right are left alone.
+     *
+     * @param  \Illuminate\Support\Collection<int, string>  $tokens
+     */
+    public static function correct($tokens)
+    {
+        $vocab = self::vocabulary();
+        if (! $vocab) return $tokens;
+        return $tokens->map(function ($t) use ($vocab) {
+            $len = mb_strlen($t);
+            if ($len < 5 || isset($vocab[$t]) || ctype_digit($t) || in_array($t, QueryIntent::FILLER, true)) return $t;
+            $best = null; $bestD = 99;
+            foreach ($vocab as $w => $n) {
+                $wl = mb_strlen($w);
+                if (abs($wl - $len) > 2 || $w[0] !== $t[0]) continue;
+                $d = levenshtein($t, $w);
+                if ($d < $bestD || ($d === $bestD && $n > ($vocab[$best] ?? 0))) { $bestD = $d; $best = $w; }
+            }
+            $limit = $len >= 6 ? 2 : 1;
+            return $best !== null && $bestD <= $limit ? $best : $t;
+        })->unique()->values();
+    }
+
+    /**
+     * Best chunks for a question. Title matches (a model or brand named in the title) outrank text-only matches,
+     * FULLTEXT adds relevance, and newer content wins ties. Chat filler (Hinglish included) never reaches the query.
+     *
+     * @return \Illuminate\Support\Collection<int, KnowledgeChunk>
+     */
     public static function search(string $query, int $limit = 5)
     {
-        $tokens = collect(preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($query), -1, PREG_SPLIT_NO_EMPTY))
-            ->filter(fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::STOP, true))->unique()->values();
+        $tokens = collect(QueryIntent::tokens($query))
+            ->filter(fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::STOP, true) && ! in_array($t, QueryIntent::FILLER, true))->unique()->values();
         if ($tokens->isEmpty()) return collect();
+        $tokens = self::correct($tokens);
 
-        $hits = KnowledgeChunk::query()
-            ->select('*', DB::raw('MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE) AS score'))
-            ->addBinding($tokens->implode(' '), 'select')
-            ->whereRaw('MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE)', [$tokens->implode(' ')])
-            ->orderByDesc('score')->limit($limit)->get();
+        $text = $tokens->implode(' ');
+        $ft = collect();
+        if (DB::connection()->getDriverName() === 'mysql') {
+            try {
+                $ft = KnowledgeChunk::query()
+                    ->select('*', DB::raw('MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE) AS score'))
+                    ->addBinding($text, 'select')
+                    ->whereRaw('MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE)', [$text])
+                    ->orderByDesc('score')->limit($limit * 3)->get();
+            } catch (\Throwable) {}
+        }
 
-        if ($hits->isNotEmpty()) return $hits;
+        // Words in the title: finds "creta", "xuv" and other short or partial words the FULLTEXT index misses.
+        $byTitle = KnowledgeChunk::query()
+            ->where(function ($q) use ($tokens) { foreach ($tokens->take(6) as $t) $q->orWhere('title', 'like', "%$t%"); })
+            ->orderByDesc('updated_at')->limit($limit * 3)->get();
 
-        // Fallback for short / partial tokens (e.g. "creta", "xuv") the fulltext index may miss.
-        return KnowledgeChunk::query()
-            ->where(function ($q) use ($tokens) {
-                foreach ($tokens->take(5) as $t) { $q->orWhere('title', 'like', "%$t%")->orWhere('content', 'like', "%$t%"); }
-            })->limit($limit)->get();
+        $all = $ft->concat($byTitle)->unique('id');
+        if ($all->isEmpty()) {
+            $all = KnowledgeChunk::query()->where(function ($q) use ($tokens) { foreach ($tokens->take(5) as $t) $q->orWhere('content', 'like', "%$t%"); })->orderByDesc('updated_at')->limit($limit * 2)->get();
+        }
+
+        return $all->map(function ($h) use ($tokens) {
+            $title = mb_strtolower((string) $h->title);
+            $h->rank = $tokens->filter(fn ($t) => str_contains($title, $t))->count() * 10 + (float) ($h->score ?? 0);
+            return $h;
+        })->sortBy([['rank', 'desc'], ['updated_at', 'desc']])->take($limit)->values();
     }
 }

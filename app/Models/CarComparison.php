@@ -2,12 +2,33 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Indexable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class CarComparison extends Model
 {
+    use Indexable;
+
     protected $guarded = [];
     protected $casts = ['is_active' => 'boolean', 'is_featured' => 'boolean'];
+
+    public static function knowledgeType(): string { return 'comparison'; }
+
+    /** Our own editorial comparison (intro, verdict, pick) becomes assistant knowledge, so it answers "X vs Y" from OUR view. */
+    public function toKnowledge(): ?array
+    {
+        $a = $this->carA; $b = $this->carB;
+        if (! $this->is_active || ! $a || ! $b || ! $a->is_published || ! $b->is_published) return null;
+        $facts = fn (VehicleModel $m) => $m->full_name.': '.$m->price_label.($m->body_type ? ', '.$m->body_type : '').($m->fuel_types ? ', '.implode('/', $m->fuel_types) : '');
+        return [
+            'title' => $this->heading,
+            'content' => trim(Str::limit(strip_tags('Comparison '.$this->heading.'. '.$facts($a).'. '.$facts($b).'. '.($this->intro ?? '').' '.($this->verdict ?? '')
+                .($this->winner ? ' Our pick: '.$this->winner->full_name.'.' : '')), 3500, '')),
+            'url' => $this->url,
+            'image' => $a->hero_url,
+        ];
+    }
 
     public function carA() { return $this->belongsTo(VehicleModel::class, 'car_a_id'); }
     public function carB() { return $this->belongsTo(VehicleModel::class, 'car_b_id'); }

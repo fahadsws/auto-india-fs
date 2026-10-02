@@ -763,3 +763,92 @@ a.btn {
 .ln .t{margin:0 0 4px;font-size:14px;font-weight:700;line-height:1.35}
 .ln a:hover .t{color:var(--red)}
 .ln-more{display:inline-block;margin-top:14px;font-weight:700;color:var(--red);font-size:14px}
+
+/* ---- Cost per km calculator: kaali-peeli taxi-meter theme ---- */
+.ckm{padding:0;overflow:hidden}
+.ckm-meter{--y:#f7c600;--k:#141414;position:relative;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:44px;align-items:start;padding:34px 34px 52px;background:var(--y);color:var(--k)}
+/* the checker band painted on Indian taxis */
+.ckm-meter::after{content:"";position:absolute;left:0;right:0;bottom:0;height:16px;background:repeating-conic-gradient(var(--k) 0 25%,transparent 0 50%) 0 0/16px 16px}
+
+/* ---- the meter itself ---- */
+.ckm-cluster{width:100%;max-width:400px;margin:0 auto}
+.ckm-taxi{background:var(--k);border-radius:18px;padding:16px 16px 18px;color:#fff}
+.ckm-lcd{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;padding:14px 20px 12px;border-radius:8px;background:#d6dcb8;color:#1d2616;box-shadow:inset 0 3px 0 rgba(0,0,0,.18);line-height:1}
+.ckm-lcd b{font:800 clamp(56px,9vw,80px)/1 var(--f,inherit);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.ckm-rs{font-size:26px;font-weight:800;margin-right:auto}
+.ckm-lcd small{font-size:13px;font-weight:700}
+.ckm-sbar{display:flex;height:10px;margin-top:16px;border-radius:5px;overflow:hidden;background:#8a8f98}
+.ckm-sbar span{display:block;height:100%;width:0;background:var(--y);transition:width .4s}
+.ckm-split{display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-size:13px;color:rgba(255,255,255,.75)}
+.ckm-split span{display:inline-flex;align-items:center;gap:7px}
+.ckm-split i{width:10px;height:10px;border-radius:2px}
+.ckm-split i.f{background:var(--y)}
+.ckm-split i.r{background:#8a8f98}
+.ckm-split b{color:#fff}
+.ckm-split em{font-style:normal}
+
+/* ---- scale: bike / auto / cab against you ---- */
+.ckm-rail{padding:0 20px;margin-top:22px}
+.ckm-scale{position:relative;height:166px}
+.ckm-scale::before{content:"";position:absolute;left:0;right:0;top:96px;height:4px;background:var(--k)}
+.ckm-scale::after{content:"";position:absolute;left:0;right:0;top:100px;height:8px;border-right:2px solid var(--k);background:linear-gradient(90deg,var(--k) 2px,transparent 2px) 0 0/5% 100%}
+.ckm-pin{position:absolute;left:0;bottom:70px;display:flex;flex-direction:column;align-items:center;transform:translateX(-50%)}
+.ckm-pin span{display:flex;flex-direction:column;align-items:center;font-size:13px;font-weight:800;line-height:1.2;white-space:nowrap}
+.ckm-pin em{font-style:normal;font-weight:600;font-size:12px;opacity:.7}
+.ckm-pin i{display:block;width:2px;height:var(--s);background:var(--k);margin-top:3px}
+.ckm-nums span{position:absolute;top:112px;transform:translateX(-50%);font-size:11px;font-weight:700;opacity:.65}
+.ckm-you{position:absolute;top:130px;left:0;display:flex;flex-direction:column;align-items:center;transform:translateX(-50%);transition:left .5s cubic-bezier(.2,.8,.2,1)}
+.ckm-you i{width:0;height:0;border:8px solid transparent;border-top:0;border-bottom:12px solid var(--k)}
+.ckm-you b{background:var(--k);color:var(--y);font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px}
+
+/* ---- bill slip: dotted leaders, torn bottom edge ---- */
+.ckm-slip{list-style:none;margin:0 0 30px;padding:6px 22px 8px;background:#fff;position:relative;container-type:inline-size}
+.ckm-slip::after{content:"";position:absolute;left:0;right:0;top:100%;height:8px;background:linear-gradient(135deg,#fff 25%,transparent 25%) -8px 0/16px 16px,linear-gradient(225deg,#fff 25%,transparent 25%) -8px 0/16px 16px}
+.ckm-slip li{display:flex;align-items:baseline;gap:6px;padding:13px 0}
+.ckm-slip li+li{border-top:0}
+.ckm-slip span{flex:1;min-width:0;display:flex;align-items:baseline;font-size:16px;font-weight:600;white-space:nowrap}
+.ckm-slip span::after{content:"";flex:1;margin:0 8px;border-bottom:2px dotted #8a8a8a;min-width:12px}
+.ckm-slip b{flex:none;font-size:24px;font-size:min(24px,8cqw);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ckm-slip i{font-style:normal}
+.ckm-slip li:last-child{flex-wrap:wrap;margin-top:6px;padding:16px 0 12px;border-top:3px solid var(--k)}
+.ckm-slip li:last-child span{flex:1 0 100%;font-weight:800}
+.ckm-slip li:last-child b{margin-left:auto;font-size:34px;font-size:min(40px,11cqw);line-height:1.1}
+
+/* ---- verdict: black plate, state shown by the top bar ---- */
+.ckm-msg{background:var(--k);color:#fff;border-radius:10px;border-top:8px solid #fb9e1e;padding:16px 20px 18px}
+.ckm-msg[data-state=good]{border-top-color:#2dd4bf}
+.ckm-msg[data-state=bad]{border-top-color:#ff4d5e}
+.ckm-msg p{margin:0;font-weight:800;font-size:18px;line-height:1.35}
+.ckm-msg .ckm-tip{margin-top:6px;font-weight:500;font-size:14px;color:rgba(255,255,255,.72)}
+
+/* ---- inputs + breakdown (unchanged) ---- */
+.ckm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;padding:28px;align-items:start}
+.ckm-sel{display:block;width:100%;height:46px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font:inherit;font-size:15px;background:#fff;color:inherit}
+.ckm-sel:focus{outline:0;border-color:var(--red)}
+.ckm-seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ckm-seg button{height:42px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;font-weight:700;font-size:14px;cursor:pointer;color:inherit}
+.ckm-seg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.ckm-seg button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.ckm-unit{font-weight:500;color:var(--ink2)}
+.ckm-note{margin:-6px 0 0;font-size:13px;color:var(--ink2);background:var(--wash);border-radius:8px;padding:10px 12px}
+.ckm-h{margin:0 0 14px;font-size:16px;font-weight:800}
+.ckm-h small{font-weight:500;color:var(--ink2)}
+.ckm-bar{display:flex;height:22px;border-radius:11px;overflow:hidden;background:var(--wash)}
+.ckm-bar span{display:block;transition:width .35s}
+.ckm-leg{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+.ckm-leg li{display:grid;grid-template-columns:14px 1fr auto auto;gap:10px;align-items:center;font-size:14px}
+.ckm-leg i{width:14px;height:14px;border-radius:4px}
+.ckm-leg b{font-weight:800}
+.ckm-leg b small{font-weight:500;color:var(--ink2);margin-left:2px}
+.ckm-leg em{font-style:normal;color:var(--ink2);min-width:74px;text-align:right}
+.ckm-race{display:grid;gap:10px}
+.ckm-race div{display:grid;grid-template-columns:70px minmax(0,1fr) 60px;gap:10px;align-items:center;font-size:14px}
+.ckm-race i{display:block;height:12px;border-radius:6px;background:var(--wash);overflow:hidden}
+.ckm-race u{display:block;height:100%;border-radius:6px;background:#94a3b8;transition:width .35s}
+.ckm-race .me{font-weight:800}
+.ckm-race .me u{background:var(--red)}
+.ckm-race b{text-align:right}
+
+@media(max-width:900px){.ckm-meter{grid-template-columns:1fr;gap:32px;padding:24px 18px 46px}.ckm-grid{grid-template-columns:1fr;gap:24px;padding:20px 18px}}
+@media(max-width:480px){.ckm-leg li{grid-template-columns:14px 1fr auto}.ckm-leg em{display:none}}
+@media(prefers-reduced-motion:reduce){.ckm-you,.ckm-sbar span,.ckm-bar span,.ckm-race u{transition:none}}
