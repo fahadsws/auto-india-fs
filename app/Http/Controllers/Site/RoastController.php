@@ -30,6 +30,7 @@ class RoastController extends Controller
     {
         $d = $r->validate([
             'car' => 'required|string|min:2|max:80',
+            'plate' => ['nullable', 'string', 'max:13', 'regex:/^[A-Za-z0-9 \-]*$/'],
             'owned' => 'required|in:'.implode(',', array_keys(Roast::OWNED)),
             'level' => 'required|in:'.implode(',', array_keys(Roast::LEVELS)),
             'habits' => 'nullable|array|max:3',
@@ -39,6 +40,8 @@ class RoastController extends Controller
 
         $car = Roast::clean($d['car'], 60);
         $name = Roast::clean((string) ($d['name'] ?? ''), 24);
+        $plate = Roast::plate((string) ($d['plate'] ?? ''));
+        if (Roast::isUnsafe($plate)) $plate = '';   // a rude "plate" is simply left off the card
         if (mb_strlen($car) < 2 || Roast::isUnsafe($car.' '.$name)) {
             return response()->json(['message' => 'Gaadi ya naam theek se likho - sirf naam, koi gaali ya baat nahi.', 'errors' => ['car' => ['Gaadi ka sahi naam likho.']]], 422);
         }
@@ -54,11 +57,11 @@ class RoastController extends Controller
 
         // Over the site-wide AI budget: still answer, from the hand-written lines.
         $allowAi = AssistantGuard::todayGlobalTokens() < AssistantGuard::limit('global_tokens_day');
-        $card = Roast::generate(['car' => $car, 'owned' => $d['owned'], 'level' => $d['level'], 'habits' => array_values(array_unique($d['habits'] ?? [])), 'name' => $name], $allowAi);
+        $card = Roast::generate(['car' => $car, 'owned' => $d['owned'], 'level' => $d['level'], 'habits' => array_values(array_unique($d['habits'] ?? [])), 'name' => $name, 'plate' => $plate], $allowAi);
 
         $u = \App\Services\AiClient::lastUsage();
         if ($card['ai']) AssistantGuard::spend($u['in'] + $u['out'], (string) $r->ip());
 
-        return response()->json(['ok' => true, 'card' => $card + ['car' => $car, 'name' => $name], 'left' => max(0, $limit - (int) Cache::get($key, 0))]);
+        return response()->json(['ok' => true, 'card' => $card + ['car' => $car, 'name' => $name, 'plate' => $plate], 'left' => max(0, $limit - (int) Cache::get($key, 0))]);
     }
 }

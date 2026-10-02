@@ -70,9 +70,12 @@
         <form class="rst-view rst-panel rst-tool" id="vTool" novalidate autocomplete="off">
           <div class="rst-hi" id="rHi"></div>
           <div class="rst-q"><span class="rst-n">1</span>Gaadi kaun si hai?</div>
-          <div class="rst-plate"><i aria-hidden="true"><b>IND</b></i><input id="rCar" list="rstCars" maxlength="60" placeholder="MARUTI SWIFT" aria-label="Gaadi ka naam" autocapitalize="characters"></div>
+          <label class="rst-sl" for="rPlate">Number plate <em>(optional — card pe chhapega)</em></label>
+          <div class="rst-plate"><i aria-hidden="true"><b>IND</b></i><input id="rPlate" maxlength="13" placeholder="MH 12 AB 1234" aria-label="Number plate" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+          <label class="rst-sl" for="rCar">Gaadi ka naam</label>
+          <input class="rst-car" id="rCar" list="rstCars" maxlength="60" placeholder="Jaise: Swift, Innova, Nexon EV, Thar…" aria-label="Gaadi ka naam" autocomplete="off">
           <datalist id="rstCars">@foreach ($cars as $c)<option value="{{ $c }}">@endforeach</datalist>
-          <div class="rst-hint">List se chuno ya khud likho — Swift, Innova, Nexon EV, Thar… kuch bhi.</div>
+          <div class="rst-hint">List se chuno ya khud likho — kuch bhi chalega. Number plate ho to roast aur mazedaar banega.</div>
 
           <div class="rst-q"><span class="rst-n">2</span>Kab se saath hai?</div>
           <div class="rst-chips" id="rOwned" role="radiogroup">@foreach (\App\Services\Roast::OWNED as $k => $l)<button type="button" role="radio" data-v="{{ $k }}" class="{{ $k === 'y1' ? 'on' : '' }}">{{ $l }}</button>@endforeach</div>
@@ -156,6 +159,7 @@
     $('#rHi').textContent = visitor ? 'Chalo ' + visitor + ', gaadi ka challan kaatte hain 🚓' : 'Chalo, gaadi ka challan kaatte hain 🚓';
     if (visitor && !$('#rName').value) $('#rName').value = visitor.slice(0, 24);
     const c = store.get('rst_car'); if (c && !$('#rCar').value) $('#rCar').value = c;
+    const pl = store.get('rst_plate'); if (pl && !$('#rPlate').value) $('#rPlate').value = pl;
     show('tool');
   }
   (async () => {
@@ -213,20 +217,21 @@
     if (!b.classList.contains('on') && $$('#rHabits .on').length >= 3) { b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 400); return; }
     b.classList.toggle('on');
   });
+  $('#rPlate').addEventListener('input', e => { const i = e.target, p = i.selectionStart; i.value = i.value.toUpperCase().replace(/[^A-Z0-9 \-]/g, ''); try { i.setSelectionRange(p, p); } catch (x) {} });
   const msgs = ['Challan book bhar rahe hain…', 'Traffic uncle se baat ho rahi hai…', 'Parking ka CCTV dekh rahe hain…', 'EMI ki date check ho rahi hai…', 'Stamp pe syahi lag rahi hai…'];
   let mi = 0, mt = null;
   views.tool.addEventListener('submit', async e => { e.preventDefault(); await run(); });
   $('#rAgain').addEventListener('click', () => run());
-  $('#rOther').addEventListener('click', () => { $('#rCar').value = ''; show('tool'); $('#rCar').focus(); });
+  $('#rOther').addEventListener('click', () => { $('#rCar').value = ''; $('#rPlate').value = ''; show('tool'); $('#rCar').focus(); });
 
   async function run() {
     if (busy) return;
     const car = $('#rCar').value.trim(), eTool = $('#eTool'); eTool.textContent = '';
     if (car.length < 2) { show('tool'); eTool.textContent = 'Pehle gaadi ka naam batao.'; $('#rCar').focus(); return; }
-    busy = true; store.set('rst_car', car); show('load'); mi = 0; $('#rLoadTxt').textContent = msgs[0];
+    busy = true; store.set('rst_car', car); store.set('rst_plate', $('#rPlate').value.trim()); show('load'); mi = 0; $('#rLoadTxt').textContent = msgs[0];
     mt = setInterval(() => { mi = (mi + 1) % msgs.length; $('#rLoadTxt').textContent = msgs[mi]; }, 1100);
     const t0 = Date.now();
-    const r = await api(root.dataset.roast, { car, owned: val('#rOwned') || 'y1', level: val('#rLevel') || 'medium', habits: $$('#rHabits .on').map(b => b.dataset.v), name: $('#rName').value.trim() }).catch(() => ({ ok: false, status: 0, data: { message: 'Connection problem. Dobara try karo.' } }));
+    const r = await api(root.dataset.roast, { car, plate: $('#rPlate').value.trim(), owned: val('#rOwned') || 'y1', level: val('#rLevel') || 'medium', habits: $$('#rHabits .on').map(b => b.dataset.v), name: $('#rName').value.trim() }).catch(() => ({ ok: false, status: 0, data: { message: 'Connection problem. Dobara try karo.' } }));
     await new Promise(res => setTimeout(res, Math.max(0, 1800 - (Date.now() - t0))));   // a short beat so the "printing" feels real
     clearInterval(mt); busy = false;
     if (r.status === 401 && r.data.gate) { show('lead'); return; }
@@ -259,17 +264,18 @@
     cx.fillStyle = P.headInk; cx.textBaseline = 'alphabetic'; cx.textAlign = 'left';
     cx.font = f(800, 26); cx.fillText(aura ? 'AUTOINDIA · MASS ENTRY DESK' : 'AUTOINDIA · TRAFFIC ROAST BRANCH', 54, 62);
     cx.font = f(800, 62); cx.fillText(aura ? 'AURA CERTIFICATE' : 'E-CHALLAN', 54, 124);
-    const no = (aura ? 'AC-' : 'RC-') + String(seed(c.car + c.title)).padStart(5, '0'), dt = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    const no = (aura ? 'AC-' : 'RC-') + String(seed((c.plate || c.car) + c.title)).padStart(5, '0'), dt = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
     cx.textAlign = 'right'; cx.font = f(700, 26); cx.fillText(no, W - 54, 62); cx.fillText(dt, W - 54, 100);
     // number plate with the car's name
-    const px = 54, py = 205, pw = W - 108, ph = 132;
+    const px = 54, py = 200, pw = W - 108, ph = 124;
     rr(px, py, pw, ph, 20); cx.fillStyle = P.plate; cx.fill(); cx.lineWidth = 6; cx.strokeStyle = aura ? P.plateInk : '#111'; cx.stroke();
     cx.save(); rr(px, py, 96, ph, 20); cx.clip(); cx.fillStyle = '#0a3d91'; cx.fillRect(px, py, 96, ph); cx.restore();
     cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = f(800, 30); cx.fillText('IND', px + 48, py + 84); cx.fillStyle = '#f2a900'; cx.beginPath(); cx.arc(px + 48, py + 42, 11, 0, 7); cx.fill();
-    const name = (c.car || '').toUpperCase(); let fs = 78; cx.font = f(800, fs); while (cx.measureText(name).width > pw - 150 && fs > 30) { fs -= 2; cx.font = f(800, fs); }
+    const name = (c.plate || c.car || '').toUpperCase(); let fs = 78; cx.font = f(800, fs); while (cx.measureText(name).width > pw - 150 && fs > 30) { fs -= 2; cx.font = f(800, fs); }
     cx.fillStyle = P.plateInk; cx.fillText(name, px + 96 + (pw - 96) / 2, py + ph / 2 + fs * .36);
-    // title
-    cx.textAlign = 'left'; cx.fillStyle = P.ac; cx.font = f(800, 58); cx.fillText(c.title, 54, 418);
+    // car name under the plate, then the title
+    cx.textAlign = 'left'; cx.fillStyle = P.mute; cx.font = f(700, 28); cx.fillText(c.plate ? (c.car || '').toUpperCase() : 'GAADI REGISTERED IN INDIA', 54, 362);
+    cx.fillStyle = P.ac; cx.font = f(800, 58); cx.fillText(c.title, 54, 424);
     cx.fillStyle = P.mute; cx.font = f(700, 26); cx.fillText(aura ? 'ROAD PRESENCE REPORT' : 'OFFENCES NOTED' + (c.name ? ' · ' + c.name.toUpperCase() : ''), 54, 458);
     // offences
     let y = 486; cx.font = f(600, 36);
@@ -296,7 +302,7 @@
     // footer
     cx.textAlign = 'left'; cx.fillStyle = P.mute; cx.font = f(700, 26); cx.fillText((c.tag || '#RoastMyCar') + '  ·  AI ka mazaak hai, dil pe mat lena', 54, H - 70);
     cx.fillStyle = P.ink; cx.font = f(800, 32); cx.fillText(root.dataset.site + '/roast-my-car', 54, H - 28);
-    cv.setAttribute('aria-label', (aura ? 'Aura certificate: ' : 'Roast challan: ') + c.car + '. ' + c.lines.join(' '));
+    cv.setAttribute('aria-label', (aura ? 'Aura certificate: ' : 'Roast challan: ') + (c.plate ? c.plate + ', ' : '') + c.car + '. ' + c.lines.join(' '));
   }
 
   /* ---------- share / download ---------- */
