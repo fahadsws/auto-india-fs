@@ -73,7 +73,7 @@
           <label class="rst-sl" for="rPlate">Number plate <em>(optional — card pe chhapega)</em></label>
           <div class="rst-plate"><i aria-hidden="true"><b>IND</b></i><input id="rPlate" maxlength="13" placeholder="MH 12 AB 1234" aria-label="Number plate" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
           <label class="rst-sl" for="rCar">Gaadi ka naam</label>
-          <input class="rst-car" id="rCar" list="rstCars" maxlength="60" placeholder="Jaise: Swift, Innova, Nexon EV, Thar…" aria-label="Gaadi ka naam" autocomplete="off">
+          <input class="rst-car" id="rCar" list="rstCars" maxlength="60" placeholder="Jaise: Swift, Innova, Thar" aria-label="Gaadi ka naam" autocomplete="off">
           <datalist id="rstCars">@foreach ($cars as $c)<option value="{{ $c }}">@endforeach</datalist>
           <div class="rst-hint">List se chuno ya khud likho — kuch bhi chalega. Number plate ho to roast aur mazedaar banega.</div>
 
