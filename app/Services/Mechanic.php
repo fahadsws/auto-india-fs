@@ -13,6 +13,8 @@ class Mechanic
 {
     public const FUELS = ['petrol', 'diesel', 'cng', 'electric', 'hybrid'];
     public const SEVERITY = ['low', 'medium', 'high', 'stop'];
+    /** Parts of the car shown on the page's "X-ray" map. */
+    public const ZONES = ['engine', 'brakes', 'tyres', 'suspension', 'ac', 'battery', 'gearbox', 'exhaust'];
     private const MAX_COST = 1000000;   // nothing on a normal car repair estimate is above ₹10 lakh
 
     public const SAFE_NOTE = "Abhi mera AI mechanic available nahi hai. Tab tak ye safe checks karo: warning light/smoke/jalne ki smell ho ya brake-steering mein dikkat ho to gaadi mat chalao aur tow karwao; warna engine oil, coolant, tyre pressure aur battery terminal dekh lo. Kuch der baad dobara try karo ya apne nazdeeki service center se baat karo.";
@@ -45,6 +47,7 @@ OUTPUT: ONLY one JSON object, no markdown:
  "quick_replies":["..",".."],
  "facts":{"car":"","age":"","km":"","fuel":"","city":"","symptom":"","recent_work":"","route":"","weather":""},   // only what you actually know, "" otherwise
  "stage":"asking" or "diagnosis",
+ "zones":["engine|brakes|tyres|suspension|ac|battery|gearbox|exhaust", ...],   // up to 3 parts of the car this problem is about, most likely first; [] if unsure
  "diagnosis":null or {
   "title":"short problem name","severity":"low|medium|high|stop","summary":"2-3 sentences",
   "why":["why this is happening, linked to what the owner told you", ...],
@@ -123,6 +126,7 @@ P;
             'reply' => $reply,
             'quick_replies' => $stage === 'diagnosis' ? ['Naya sawaal poochna hai', 'Nayi problem'] : self::list($d['quick_replies'] ?? [], 4, 40),
             'facts' => $facts,
+            'zones' => array_slice(array_values(array_unique(array_filter((array) ($d['zones'] ?? []), fn ($z) => is_string($z) && in_array($z, self::ZONES, true)))), 0, 3),
             'stage' => $stage,
             'diagnosis' => $stage === 'diagnosis' ? $diag : null,
         ];
