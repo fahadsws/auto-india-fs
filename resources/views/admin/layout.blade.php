@@ -50,7 +50,7 @@
       <ul class="menu-inner py-1">
         <li class="menu-item {{ $on('admin.dashboard') }}"><a href="{{ route('admin.dashboard') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-smart-home"></i><div>Dashboard</div></a></li>
 
-        @canany(['articles.view', 'categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'pages.manage', 'seo.manage'])
+        @canany(['articles.view', 'categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'comparisons.manage', 'pages.manage', 'seo.manage'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">Content</span></li>
         @endcanany
         @can('articles.view')
@@ -65,7 +65,7 @@
         @can('cars.manage')
         <li class="menu-item {{ $on('admin.car-models.*') }}"><a href="{{ route('admin.car-models.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-car-suv"></i><div>Vehicle catalog</div></a></li>
         @endcan
-        @can('cars.manage')
+        @can('comparisons.manage')
         <li class="menu-item {{ $on('admin.comparisons.*') }}"><a href="{{ route('admin.comparisons.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-arrows-diff"></i><div>Comparisons</div></a></li>
         @endcan
         @can('categories.manage')
@@ -78,13 +78,13 @@
         <li class="menu-item {{ $on('admin.videos.*') }}"><a href="{{ route('admin.videos.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-brand-youtube"></i><div>Video library</div></a></li>
         @endcan
 
-        @canany(['listings.manage', 'leads.view'])
+        @canany(['listings.manage', 'car_masters.manage', 'leads.view', 'assistant.manage'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">Marketplace</span></li>
         @endcanany
         @can('listings.manage')
         <li class="menu-item {{ $on('admin.listings.*', 'admin.listing-sources.*') }}"><a href="{{ route('admin.listings.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-car"></i><div>Car listings</div></a></li>
         @endcan
-        @can('cars.manage')
+        @can('car_masters.manage')
         <li class="menu-item {{ $on('admin.car-masters') }}"><a href="{{ route('admin.car-masters') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-adjustments-horizontal"></i><div>Car Master</div></a></li>
         @endcan
         @can('leads.view')
@@ -95,19 +95,23 @@
         <li class="menu-item {{ $on('admin.assistant.*') }}"><a href="{{ route('admin.assistant.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-sparkles"></i><div>AI chats & usage</div></a></li>
         @endcan
 
-        @canany(['automation.manage', 'settings.manage'])
+        @canany(['automation.manage', 'home.manage', 'menus.manage', 'settings.manage'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">AI & Automation</span></li>
         @endcanany
         @can('automation.manage')
         <li class="menu-item {{ $on('admin.automation') }}"><a href="{{ route('admin.automation') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-robot"></i><div>Automation</div></a></li>
         @endcan
-        @can('settings.manage')
+        @can('home.manage')
         <li class="menu-item {{ $on('admin.home-settings') }}"><a href="{{ route('admin.home-settings') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-home-edit"></i><div>Home settings</div></a></li>
+        @endcan
+        @can('menus.manage')
         <li class="menu-item {{ $on('admin.menus.*') }}"><a href="{{ route('admin.menus.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-layout-navbar"></i><div>Header &amp; Footer</div></a></li>
+        @endcan
+        @can('settings.manage')
         <li class="menu-item {{ $on('admin.settings') }}"><a href="{{ route('admin.settings') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-settings"></i><div>Settings</div></a></li>
         @endcan
 
-        @canany(['users.manage', 'roles.manage'])
+        @canany(['users.manage', 'roles.manage', 'data.reset'])
         <li class="menu-header small text-uppercase"><span class="menu-header-text">Team</span></li>
         @endcanany
         @can('users.manage')
@@ -115,6 +119,9 @@
         @endcan
         @can('roles.manage')
         <li class="menu-item {{ $on('admin.roles.*') }}"><a href="{{ route('admin.roles.index') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-shield-lock"></i><div>Roles & permissions</div></a></li>
+        @endcan
+        @can('data.reset')
+        <li class="menu-item {{ $on('admin.data-reset*') }}"><a href="{{ route('admin.data-reset') }}" class="menu-link"><i class="menu-icon tf-icons ti ti-database-off"></i><div>Reset site data</div></a></li>
         @endcan
 
         <li class="menu-header small text-uppercase"><span class="menu-header-text">Site</span></li>

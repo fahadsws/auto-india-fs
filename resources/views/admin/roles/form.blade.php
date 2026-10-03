@@ -6,8 +6,8 @@
     'admin.access' => 'Access the admin panel', 'articles.view' => 'View articles', 'articles.create' => 'Create articles',
     'articles.edit_own' => 'Edit own articles', 'articles.edit_all' => 'Edit everyone\'s articles', 'articles.publish' => 'Publish articles',
     'articles.delete' => 'Delete articles', 'categories.manage' => 'Manage categories', 'sources.manage' => 'Manage news sources',
-    'videos.manage' => 'Manage video library', 'cars.manage' => 'Manage new-car catalog', 'listings.manage' => 'Manage car listings', 'leads.view' => 'View leads', 'leads.manage' => 'Update / delete leads',
-    'users.manage' => 'Manage users', 'roles.manage' => 'Manage roles', 'settings.manage' => 'Change settings & API keys', 'automation.manage' => 'Run & configure automation',
+    'videos.manage' => 'Manage video library', 'cars.manage' => 'Manage new-car catalog', 'comparisons.manage' => 'Manage comparisons', 'car_masters.manage' => 'Manage car masters (brands, fuels, body types)', 'pages.manage' => 'Manage custom pages', 'seo.manage' => 'Manage SEO', 'listings.manage' => 'Manage car listings', 'leads.view' => 'View leads', 'leads.manage' => 'Update / delete leads', 'assistant.manage' => 'View AI chats & usage, block visitors',
+    'users.manage' => 'Manage users', 'roles.manage' => 'Manage roles', 'settings.manage' => 'Change settings & API keys', 'home.manage' => 'Edit home page settings', 'menus.manage' => 'Edit header & footer menus', 'data.reset' => 'Reset site data (deletes content - dangerous)', 'automation.manage' => 'Run & configure automation',
   ];
 @endphp
 @section('content')

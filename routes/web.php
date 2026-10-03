@@ -117,19 +117,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         Route::middleware('permission:cars.manage')->group(function () {
-            Route::get('car-masters', [Admin\CarMasterController::class, 'index'])->name('car-masters');
-            Route::post('car-masters', [Admin\CarMasterController::class, 'store'])->name('car-masters.store');
-            Route::put('car-masters/{type}/{id}', [Admin\CarMasterController::class, 'update'])->name('car-masters.update');
-            Route::delete('car-masters/{type}/{id}', [Admin\CarMasterController::class, 'destroy'])->name('car-masters.destroy');
             Route::get('car-models/data', [Admin\CarModelController::class, 'data'])->name('car-models.data');
             Route::post('car-models/import-url', [Admin\CarModelController::class, 'importUrl'])->name('car-models.import-url');
             Route::get('car-models/{car_model}/preview', [Admin\CarModelController::class, 'preview'])->name('car-models.preview');
             Route::post('car-models/bulk', [Admin\CarModelController::class, 'bulk'])->name('car-models.bulk');
             Route::resource('car-models', Admin\CarModelController::class)->except(['show']);
+            Route::post('car-models/{car_model}/refresh', [Admin\CarModelController::class, 'refresh'])->name('car-models.refresh');
+        });
+
+        Route::middleware('permission:comparisons.manage')->group(function () {
             Route::get('comparisons/data', [Admin\ComparisonController::class, 'data'])->name('comparisons.data');
             Route::post('comparisons/bulk', [Admin\ComparisonController::class, 'bulk'])->name('comparisons.bulk');
             Route::resource('comparisons', Admin\ComparisonController::class)->except(['show']);
-            Route::post('car-models/{car_model}/refresh', [Admin\CarModelController::class, 'refresh'])->name('car-models.refresh');
+        });
+
+        Route::middleware('permission:car_masters.manage')->group(function () {
+            Route::get('car-masters', [Admin\CarMasterController::class, 'index'])->name('car-masters');
+            Route::post('car-masters', [Admin\CarMasterController::class, 'store'])->name('car-masters.store');
+            Route::put('car-masters/{type}/{id}', [Admin\CarMasterController::class, 'update'])->name('car-masters.update');
+            Route::delete('car-masters/{type}/{id}', [Admin\CarMasterController::class, 'destroy'])->name('car-masters.destroy');
         });
 
         Route::middleware('permission:sources.manage')->group(function () {
@@ -198,9 +204,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('settings', [Admin\SettingController::class, 'update'])->name('settings.update');
             Route::post('settings/check', [Admin\SettingController::class, 'check'])->name('settings.check');
             Route::post('settings/reindex', [Admin\SettingController::class, 'reindex'])->name('settings.reindex');
+        });
+
+        Route::middleware('permission:home.manage')->group(function () {
             Route::get('home-settings', [Admin\HomeSettingController::class, 'edit'])->name('home-settings');
             Route::put('home-settings', [Admin\HomeSettingController::class, 'update'])->name('home-settings.update');
+        });
+
+        Route::middleware('permission:menus.manage')->group(function () {
             Route::resource('menus', Admin\MenuItemController::class)->except(['show']);
+        });
+
+        // Destructive: empties every data table (users, settings and roles are kept). Super Admin by default.
+        Route::middleware('permission:data.reset')->group(function () {
+            Route::get('data-reset', [Admin\DataResetController::class, 'index'])->name('data-reset');
+            Route::post('data-reset', [Admin\DataResetController::class, 'run'])->middleware('throttle:5,1')->name('data-reset.run');
         });
 
         Route::middleware('permission:automation.manage')->group(function () {
