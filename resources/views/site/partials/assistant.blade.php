@@ -21,7 +21,7 @@
 @endphp
 <div class="aw {{ $mode === 'page' ? 'aw-page' : '' }}" id="ag" data-mode="{{ $mode }}" data-name="{{ $asstName }}" data-voice="{{ $voiceOn ? 1 : 0 }}" data-fallback="{{ \App\Models\Setting::bool('elevenlabs.browser_fallback', false) ? 1 : 0 }}" data-greet="{{ $voiceGreet }}"
      data-chat="{{ route('assistant.chat') }}" data-tts="{{ route('assistant.tts') }}" data-me="{{ route('assistant.me') }}"
-     data-lead="{{ route('assistant.lead') }}" data-reset="{{ route('assistant.reset') }}" data-verify="{{ route('assistant.verify') }}" data-feedback="{{ route('assistant.feedback') }}">
+     data-lead="{{ route('assistant.lead') }}" data-reset="{{ route('assistant.reset') }}" data-feedback="{{ route('assistant.feedback') }}">
   @if ($mode === 'float')
     <button class="aw-fab" id="agFab" type="button" aria-label="Chat with {{ $asstName }}">
       <span class="aw-rip"></span><span class="aw-rip r2"></span><span class="aw-rip r3"></span>
@@ -45,7 +45,7 @@
       {{-- loading --}}
       <div class="aw-view show" id="vLoad">@include('site.partials.bubble')</div>
 
-      {{-- step 1: lead form --}}
+      {{-- lead form (shown after the free messages; protected by invisible reCAPTCHA, no email code) --}}
       <form class="aw-view aw-form" id="vLead" novalidate autocomplete="on">
         @include('site.partials.bubble', ['cls' => 'aw-orb-md'])
         <h3>Continue your conversation</h3>
@@ -53,23 +53,12 @@
         <p class="aw-sub">Share your details once and {{ $asstName }} will keep helping you with prices, comparisons, test drives &amp; more.</p>
         <label class="aw-f"><span>Full name</span><input name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rahul Sharma" required></label>
         <label class="aw-f"><span>Mobile number</span><div class="aw-ph"><b>+91</b><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit mobile" required></div></label>
-        <label class="aw-f"><span>Email <em>(we'll send a verification code)</em></span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
+        <label class="aw-f"><span>Email</span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
         <label class="aw-f"><span>City <em>(optional)</em></span><input name="city" list="awCities" autocomplete="address-level2" maxlength="80" placeholder="Your city"><datalist id="awCities">@foreach (\App\Support\Filters::CITIES as $c)<option value="{{ is_array($c) ? ($c['name'] ?? '') : $c }}">@endforeach</datalist></label>
         <input class="aw-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
         <div class="aw-err" id="eLead" role="alert"></div>
-        <button class="aw-btn" type="submit"><span>Send verification code</span><i class="ti ti-arrow-right"></i></button>
-        <p class="aw-fine"><i class="ti ti-lock"></i> Your details are used only to help you and are never shared.</p>
-      </form>
-
-      {{-- step 2: OTP --}}
-      <form class="aw-view aw-form" id="vOtp" novalidate>
-        @include('site.partials.bubble', ['cls' => 'aw-orb-md'])
-        <h3>Check your email</h3>
-        <p class="aw-sub">We sent a 6-digit code to <b id="otpMail"></b>.</p>
-        <div class="aw-otp" id="otpBoxes">@for ($i = 0; $i < 6; $i++)<input inputmode="numeric" maxlength="1" autocomplete="{{ $i ? 'off' : 'one-time-code' }}" aria-label="Digit {{ $i + 1 }}">@endfor</div>
-        <div class="aw-err" id="eOtp" role="alert"></div>
-        <button class="aw-btn" type="submit"><span>Verify &amp; start chatting</span><i class="ti ti-sparkles"></i></button>
-        <p class="aw-fine"><button type="button" class="aw-lnk" id="otpResend" disabled>Resend code</button> · <button type="button" class="aw-lnk" id="otpBack">Change details</button></p>
+        <button class="aw-btn" type="submit"><span>Continue chatting</span><i class="ti ti-arrow-right"></i></button>
+        <p class="aw-fine"><i class="ti ti-lock"></i> Your details are used only to help you and are never shared. @include('site.partials.recaptcha-note')</p>
       </form>
 
       {{-- chat --}}

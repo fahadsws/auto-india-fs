@@ -83,4 +83,29 @@ class GoLiveFixesTest extends TestCase
         $this->assertSame(1, \App\Models\MenuItem::where('location', 'header')->where('url', '/e-challan')->count());
         $this->assertSame(1, \App\Models\MenuItem::where('location', 'header')->where('title', 'Tools')->count());
     }
+
+    public function test_location_resolves_to_the_nearest_listed_city_or_openstreetmap(): void
+    {
+        Http::fake(['*nominatim*' => Http::response(['address' => ['town' => 'Karad']])]);
+        $this->getJson('/location/resolve?lat=18.53&lng=73.85')->assertOk()->assertJsonPath('city', 'Pune');
+        Http::assertNothingSent();
+        $this->getJson('/location/resolve?lat=17.28&lng=74.18')->assertOk()->assertJsonPath('city', 'Karad');   // ~100 km from Pune
+        $this->getJson('/location/resolve?lat=48.8&lng=2.3')->assertStatus(422);
+        $this->getJson('/location/cities')->assertOk()->assertJsonFragment(['Mumbai']);
+    }
+
+    public function test_used_tab_puts_the_detected_city_first(): void
+    {
+        $r = $this->postJson('/assistant/chat', ['intent' => 'used', 'city' => 'Nashik'])->assertOk();
+        $this->assertSame('Nashik', $r->json('chips.0.label'));
+        $this->assertStringContainsString('Nashik', $r->json('answer'));
+    }
+
+    public function test_pages_wire_up_location_autofill_and_recaptcha_meta(): void
+    {
+        $this->get('/sell-your-car')->assertOk()->assertSee('data-loc-city', false);
+        \App\Models\Setting::put('recaptcha.site_key', 'SITEKEY');
+        \App\Models\Setting::put('recaptcha.secret_key', 'x');
+        $this->get('/contact')->assertSee('recaptcha/api.js?render=SITEKEY', false)->assertSee('name="recaptcha-site-key" content="SITEKEY"', false);
+    }
 }

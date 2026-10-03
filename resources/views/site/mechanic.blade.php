@@ -23,7 +23,7 @@
 <div class="w">
   <div class="article-wrap emi-wrap">
     <div>
-      <div class="mch" id="mch" data-me="{{ route('assistant.me', ['feature' => 'mechanic']) }}" data-lead="{{ route('assistant.lead') }}" data-verify="{{ route('assistant.verify') }}"
+      <div class="mch" id="mch" data-me="{{ route('assistant.me', ['feature' => 'mechanic']) }}" data-lead="{{ route('assistant.lead') }}"
         data-chat="{{ route('mechanic.chat') }}" data-url="{{ route('mechanic') }}" data-site="{{ \App\Models\Setting::get('site.name') }}">
 
         <header class="mch-hero">
@@ -41,29 +41,21 @@
 
         <form class="mch-view mch-panel" id="vLead" novalidate autocomplete="on">
           <h2>Continue with your details</h2>
-          <p class="mch-sub">You have used your free messages. Share your details once and verify your email with a code to keep chatting. We will not ask again.</p>
+          <p class="mch-sub">You have used your free messages. Share your details once to keep chatting. We will not ask again.</p>
           <div class="mch-row">
             <label class="mch-f"><span>Full name</span><input name="name" autocomplete="name" maxlength="60" placeholder="Rahul Sharma" required></label>
             <label class="mch-f"><span>Mobile number</span><div class="mch-ph"><b>+91</b><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required></div></label>
           </div>
           <div class="mch-row">
-            <label class="mch-f"><span>Email <em>(we'll send a verification code)</em></span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
+            <label class="mch-f"><span>Email </span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
             <label class="mch-f"><span>City <em>(optional)</em></span><input name="city" list="mchCities" autocomplete="address-level2" maxlength="80" placeholder="Your city"><datalist id="mchCities">@foreach (\App\Support\Filters::CITIES as $c)<option value="{{ is_array($c) ? ($c['name'] ?? '') : $c }}">@endforeach</datalist></label>
           </div>
           <input class="mch-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <div class="mch-err" id="eLead" role="alert"></div>
-          <button class="mch-btn" type="submit"><span>Send verification code</span> <i>→</i></button>
-          <p class="mch-fine">🔒 Your details are used only to assist you and are never sold.</p>
+          <button class="mch-btn" type="submit"><span>Continue</span> <i>→</i></button>
+          <p class="mch-fine">🔒 Your details are used only to assist you and are never sold. @include('site.partials.recaptcha-note')</p>
         </form>
 
-        <form class="mch-view mch-panel" id="vOtp" novalidate>
-          <h2>Check your email</h2>
-          <p class="mch-sub">We sent a 6-digit code to <b id="otpMail"></b>.</p>
-          <div class="mch-otp" id="otpBoxes">@for ($i = 0; $i < 6; $i++)<input inputmode="numeric" maxlength="1" autocomplete="{{ $i ? 'off' : 'one-time-code' }}" aria-label="Digit {{ $i + 1 }}">@endfor</div>
-          <div class="mch-err" id="eOtp" role="alert"></div>
-          <button class="mch-btn" type="submit"><span>Verify &amp; continue</span> <i>→</i></button>
-          <p class="mch-fine"><button type="button" class="mch-lnk" id="otpResend" disabled>Resend code</button> · <button type="button" class="mch-lnk" id="otpBack">Change details</button></p>
-        </form>
 
         {{-- the workshop: X-ray car + chat --}}
         <section class="mch-view mch-shop" id="vShop">
@@ -98,7 +90,7 @@
                 <label>Age<input id="pAge" maxlength="30" placeholder="2 years" autocomplete="off"></label>
                 <label>Kilometres run<input id="pKm" maxlength="30" placeholder="28,000 km" autocomplete="off"></label>
                 <label>Fuel<select id="pFuel"><option value="">—</option>@foreach (\App\Services\Mechanic::FUELS as $f)<option value="{{ $f }}">{{ ucfirst($f) }}</option>@endforeach</select></label>
-                <label class="wide">City<input id="pCity" maxlength="60" placeholder="Pune" autocomplete="address-level2" list="mchCities"></label>
+                <label class="wide">City<input id="pCity" data-loc-city maxlength="60" placeholder="Pune" autocomplete="address-level2" list="mchCities"></label>
               </div>
               <datalist id="mchCars"><option value="Maruti Swift"><option value="Maruti Alto"><option value="Maruti WagonR"><option value="Maruti Baleno"><option value="Maruti Brezza"><option value="Maruti Ertiga"><option value="Hyundai i20"><option value="Hyundai Creta"><option value="Hyundai Venue"><option value="Tata Nexon"><option value="Tata Punch"><option value="Tata Harrier"><option value="Mahindra Thar"><option value="Mahindra Scorpio"><option value="Mahindra XUV700"><option value="Honda City"><option value="Toyota Innova Crysta"><option value="Kia Seltos"></datalist>
               <div class="mch-noted" id="mNoted" hidden><b>What I have noted:</b><ul id="mNotedList"></ul></div>
@@ -155,7 +147,7 @@
   let state = { msgs: [], facts: {}, diag: null, zone: '', talk: [], hot: [] };
   try { const sv = JSON.parse(ss.get('mch_state') || 'null'); if (sv && Array.isArray(sv.msgs)) state = { msgs: sv.msgs.slice(-40), facts: sv.facts || {}, diag: sv.diag || null, zone: sv.zone || '', talk: sv.talk || [], hot: sv.hot || [] }; } catch (e) {}
   const save = () => ss.set('mch_state', JSON.stringify(state));
-  const views = { wait: $('#vWait'), lead: $('#vLead'), otp: $('#vOtp'), shop: $('#vShop') };
+  const views = { wait: $('#vWait'), lead: $('#vLead'), shop: $('#vShop') };
   const show = v => { Object.entries(views).forEach(([k, n]) => n.classList.toggle('show', k === v)); $('#mResult').hidden = !(v === 'shop' && state.diag); };
   const api = async (url, body) => {
     const r = await fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
@@ -186,7 +178,7 @@
     else enter((r && r.ok && r.data) || {});                                          // verified, or still within the free messages
   })();
 
-  /* ---------- lead form + email OTP (same endpoints as the assistant) ---------- */
+  /* ---------- lead form (same endpoint as the assistant; invisible reCAPTCHA, no email code) ---------- */
   const fLead = views.lead, eLead = $('#eLead');
   fLead.addEventListener('submit', async e => {
     e.preventDefault(); eLead.textContent = '';
@@ -199,31 +191,12 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.email || '').trim())) return bad('email', 'Enter a valid email address.');
     if (v.city && !ls.get('mch_city')) ls.set('mch_city', v.city);
     const btn = $('button[type=submit]', fLead); btn.disabled = true;
+    v.recaptcha = await (window.AIC ? AIC.recaptcha('assistant_lead') : Promise.resolve(''));   // invisible check
     const r = await api(root.dataset.lead, v).catch(() => ({ ok: false, data: { message: 'Connection problem. Please try again.' } }));
     btn.disabled = false;
     if (!r.ok) { eLead.textContent = firstError(r.data); return; }
-    if (r.data.verified) return enter(r.data);
-    $('#otpMail').textContent = r.data.email || v.email;
-    show('otp'); startResend(60); $('#otpBoxes input').focus();
-  });
-  const boxes = $$('#otpBoxes input'), eOtp = $('#eOtp'), resend = $('#otpResend'); let rt = null;
-  boxes.forEach((b, i) => {
-    b.addEventListener('input', () => { b.value = b.value.replace(/\D/g, '').slice(-1); if (b.value && boxes[i + 1]) boxes[i + 1].focus(); if (boxes.every(x => x.value)) views.otp.requestSubmit(); });
-    b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && boxes[i - 1]) boxes[i - 1].focus(); });
-    b.addEventListener('paste', e => { const t = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!t) return; e.preventDefault(); t.split('').forEach((c, j) => boxes[j] && (boxes[j].value = c)); boxes[Math.min(t.length, 5)].focus(); if (t.length === 6) views.otp.requestSubmit(); });
-  });
-  function startResend(s) { clearInterval(rt); resend.disabled = true; const tick = () => { resend.textContent = s > 0 ? 'Resend code in ' + s + 's' : 'Resend code'; if (s <= 0) { resend.disabled = false; clearInterval(rt); } s--; }; tick(); rt = setInterval(tick, 1000); }
-  views.otp.addEventListener('submit', async e => {
-    e.preventDefault(); eOtp.textContent = '';
-    const code = boxes.map(b => b.value).join(''); if (code.length !== 6) { eOtp.textContent = 'Enter the 6-digit code.'; return; }
-    const btn = $('button[type=submit]', views.otp); btn.disabled = true;
-    const r = await api(root.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: 'Connection problem. Please try again.' } }));
-    btn.disabled = false;
-    if (!r.ok) { eOtp.textContent = firstError(r.data); boxes.forEach(b => b.value = ''); boxes[0].focus(); if (r.data.restart) show('lead'); return; }
     enter(r.data);
   });
-  resend.addEventListener('click', async () => { const v = Object.fromEntries(new FormData(fLead).entries()); v.phone = (v.phone || '').replace(/\D/g, ''); resend.disabled = true; const r = await api(root.dataset.lead, v).catch(() => null); if (r && r.ok) startResend(60); else { eOtp.textContent = r ? firstError(r.data) : 'Connection problem.'; resend.disabled = false; } });
-  $('#otpBack').addEventListener('click', () => show('lead'));
 
   /* ---------- job card (profile) ---------- */
   const P = { car: $('#pCar'), age: $('#pAge'), km: $('#pKm'), fuel: $('#pFuel'), city: $('#pCity') };

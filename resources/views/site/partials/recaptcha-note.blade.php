@@ -1,0 +1,1 @@
+@if (\App\Services\Recaptcha::enabled())<span class="rc-note">Protected by reCAPTCHA; the Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.</span>@endif

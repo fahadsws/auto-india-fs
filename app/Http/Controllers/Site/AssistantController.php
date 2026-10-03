@@ -18,6 +18,7 @@ class AssistantController extends Controller
         $d = $r->validate([
             'message' => 'required_without:intent|nullable|string|max:1000',
             'intent' => 'nullable|in:new,used,sell',
+            'city' => 'nullable|string|max:60',
             'history' => 'nullable|array|max:6',
             'history.*.role' => 'in:user,assistant',
             'history.*.content' => 'string|max:1200',
@@ -28,7 +29,7 @@ class AssistantController extends Controller
         // The New / Used / Sell tabs are answered without the AI and do not use up a free message.
         if (! empty($d['intent'])) {
             try {
-                return response()->json($assistant->choose($d['intent'], $s) + ['token' => $s->token]);
+                return response()->json($assistant->choose($d['intent'], $s, (string) ($d['city'] ?? '')) + ['token' => $s->token]);
             } catch (\Throwable $e) {
                 return $this->failed($e, 'tab');
             }

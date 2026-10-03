@@ -31,15 +31,10 @@ class AssistantTest extends TestCase
         Setting::put('assistant.limit_min_gap', '0');
     }
 
-    /** Registers a lead, reads the OTP from the mail, verifies, returns the session token. */
+    /** Registers a lead (no email code - reCAPTCHA is off in tests) and returns the session token. */
     private function verified(array $over = []): string
     {
-        $sent = null;
-        Mail::shouldReceive('raw')->andReturnUsing(function ($body) use (&$sent) { $sent = $body; });
-        $this->postJson('/assistant/lead', $over + $this->lead)->assertOk()->assertJson(['otp' => true]);
-        preg_match('/is: (\d{6})/', $sent, $m);
-        $res = $this->postJson('/assistant/verify', ['code' => $m[1]])->assertOk()->assertJson(['verified' => true]);
-        return $res->json('token');
+        return $this->postJson('/assistant/lead', $over + $this->lead)->assertOk()->assertJson(['verified' => true])->json('token');
     }
 
     /** What the faked AI says next. Change it between messages to script a conversation. */
@@ -77,11 +72,7 @@ class AssistantTest extends TestCase
         $anon = ['X-Assistant-Token' => $this->postJson('/assistant/chat', ['message' => 'best suv?'])->json('token')];
         $this->postJson('/assistant/chat', ['message' => 'again?'], $anon)->assertStatus(401);
 
-        $sent = null;
-        Mail::shouldReceive('raw')->andReturnUsing(function ($body) use (&$sent) { $sent = $body; });
-        $this->postJson('/assistant/lead', $this->lead, $anon)->assertOk();
-        preg_match('/is: (\d{6})/', $sent, $m);
-        $res = $this->postJson('/assistant/verify', ['code' => $m[1]], $anon)->assertOk()->assertJson(['verified' => true]);
+        $res = $this->postJson('/assistant/lead', $this->lead, $anon)->assertOk()->assertJson(['verified' => true]);
 
         $this->assertSame($anon['X-Assistant-Token'], $res->json('token'));   // same row: counters and memory carry over
         $this->postJson('/assistant/chat', ['message' => 'continue please'], ['X-Assistant-Token' => $res->json('token')])->assertOk();
@@ -123,27 +114,40 @@ class AssistantTest extends TestCase
     public function test_lead_validation_and_honeypot(): void
     {
         $this->postJson('/assistant/lead', ['name' => 'A', 'phone' => '12345', 'email' => 'bad'])->assertStatus(422)->assertJsonValidationErrors(['name', 'phone', 'email']);
-        $this->postJson('/assistant/lead', $this->lead + ['website' => 'http://spam'])->assertOk();
+        $this->postJson('/assistant/lead', $this->lead + ['website' => 'http://spam'])->assertStatus(422);
         $this->assertSame(0, Lead::count());
     }
 
-    public function test_otp_flow_saves_lead_and_wrong_code_is_rejected(): void
+    public function test_lead_is_saved_without_any_email_code(): void
     {
-        Mail::shouldReceive('raw')->andReturnNull();
-        $this->postJson('/assistant/lead', $this->lead)->assertOk();
-        $this->postJson('/assistant/verify', ['code' => '000000'])->assertStatus(422);
+        $this->postJson('/assistant/lead', $this->lead)->assertOk()->assertJson(['verified' => true]);
         $lead = Lead::first();
         $this->assertSame('chatbot', $lead->type);
         $this->assertNull($lead->email_verified_at);
-        $this->postJson('/assistant/lead', $this->lead)->assertStatus(429); // 60s resend cooldown
+        $this->assertSame(1, \App\Models\AssistantSession::whereNotNull('lead_id')->count());
     }
 
-    public function test_otp_locks_after_five_wrong_attempts(): void
+    public function test_recaptcha_blocks_bots_when_keys_are_set_and_is_skipped_when_not(): void
     {
-        Mail::shouldReceive('raw')->andReturnNull();
-        $this->postJson('/assistant/lead', $this->lead)->assertOk();
-        for ($i = 0; $i < 5; $i++) $this->postJson('/assistant/verify', ['code' => '111111'])->assertStatus(422);
-        $this->postJson('/assistant/verify', ['code' => '111111'])->assertStatus(422)->assertJson(['expired' => true]);
+        Setting::put('recaptcha.site_key', 'site');
+        Setting::put('recaptcha.secret_key', 'secret');
+        Http::fake(['*recaptcha*' => Http::sequence()
+            ->push(['success' => true, 'score' => 0.9, 'action' => 'assistant_lead'])
+            ->push(['success' => true, 'score' => 0.1, 'action' => 'assistant_lead'])
+            ->push(['success' => false, 'error-codes' => ['invalid-input-response']])]);
+
+        $this->postJson('/assistant/lead', $this->lead)->assertStatus(422);                                        // no token at all
+        $this->postJson('/assistant/lead', $this->lead + ['recaptcha' => 'tok'])->assertOk()->assertJson(['verified' => true]);   // human
+        $this->postJson('/assistant/lead', ['email' => 'b@example.com'] + $this->lead + ['recaptcha' => 'tok'])->assertStatus(422);  // low score
+        $this->postJson('/assistant/lead', ['email' => 'c@example.com'] + $this->lead + ['recaptcha' => 'bad'])->assertStatus(422);  // rejected
+    }
+
+    public function test_an_existing_email_never_hands_over_someone_elses_session(): void
+    {
+        $first = $this->verified();
+        $this->flushSession();
+        $second = $this->postJson('/assistant/lead', $this->lead)->assertOk()->json('token');   // same email, different browser
+        $this->assertNotSame($first, $second);
     }
 
     public function test_verified_visitor_chats_and_tokens_are_recorded(): void

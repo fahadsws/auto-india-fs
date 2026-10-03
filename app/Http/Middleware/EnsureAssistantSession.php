@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * Visitors may use the AI straight away. After a few free messages (Settings -> Assistant) they must share their details and
- * verify their email once; the gate then opens for good. Usage is counted per visitor in assistant_sessions.messages_total.
+ * Visitors may use the AI straight away. After a few free messages (Settings -> Assistant) they must share their details once
+ * (protected by reCAPTCHA, no email code); the gate then opens for good. Usage is counted per visitor in assistant_sessions.messages_total.
  *
  * Usage: `assistant.session` (assistant, roast) or `assistant.session:mechanic` (mechanic gets a slightly longer free run,
  * because a diagnosis needs several questions).
@@ -51,7 +51,7 @@ class EnsureAssistantSession
 
     public static function verified(?AssistantSession $s): bool
     {
-        return (bool) ($s && $s->lead_id && (! Setting::bool('assistant.otp_required', true) || $s->lead?->email_verified_at));
+        return (bool) ($s && $s->lead_id);
     }
 
     /** Free messages before the details form. 0 = ask straight away. */

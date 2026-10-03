@@ -4,20 +4,18 @@ namespace App\Http\Controllers\Site;
 
 use App\Http\Controllers\Controller;
 use App\Models\AssistantFeedback;
-use App\Models\AssistantOtp;
 use App\Models\AssistantSession;
 use App\Models\Lead;
 use App\Models\Setting;
 use App\Http\Middleware\EnsureAssistantSession;
 use App\Services\AssistantGuard;
+use App\Services\Recaptcha;
 use App\Services\LeadNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
-/** Lead capture + free email-OTP verification that unlocks the AI chat. */
+/** Lead capture (protected by reCAPTCHA, no email OTP) that unlocks the AI chat after the free messages. */
 class AssistantLeadController extends Controller
 {
     /** Who is this visitor? Lets returning visitors skip the form. */
@@ -44,7 +42,7 @@ class AssistantLeadController extends Controller
     public function submit(Request $r)
     {
         abort_unless(Setting::bool('assistant.enabled', true), 404);
-        if ($r->filled('website')) return response()->json(['ok' => true, 'otp' => true]); // honeypot: pretend success
+        if ($r->filled('website')) return response()->json(['message' => 'Something went wrong. Please try again.'], 422); // honeypot
 
         $d = $r->validate([
             'name' => ['required', 'string', 'min:2', 'max:60', 'regex:/^[\pL\s\.\'\-]+$/u'],
@@ -52,9 +50,13 @@ class AssistantLeadController extends Controller
             'email' => ['required', 'email:rfc', 'max:120'],
             'city' => 'nullable|string|max:80',
             'interest' => 'nullable|string|max:120',
+            'recaptcha' => 'nullable|string|max:4000',
         ], ['phone.regex' => 'Enter a valid 10-digit Indian mobile number.', 'name.regex' => 'Please enter your real name.']);
 
-        // Cap how many distinct leads one IP can create per day (stops form spam / OTP mail bombing).
+        $captcha = Recaptcha::verify($d['recaptcha'] ?? null, 'assistant_lead', (string) $r->ip());
+        if (! $captcha['ok']) return response()->json(['message' => $captcha['message']], 422);
+
+        // Cap how many distinct leads one IP can create per day (stops form spam).
         $ipKey = 'asst:leads:'.$r->ip().':'.today()->toDateString();
         Cache::add($ipKey, 0, now()->addDay());
         if (Cache::increment($ipKey) > 8) {
@@ -63,59 +65,14 @@ class AssistantLeadController extends Controller
 
         $email = Str::lower($d['email']);
         $lead = Lead::where('type', 'chatbot')->where('email', $email)->first() ?? new Lead(['type' => 'chatbot', 'status' => 'new']);
+        $isNew = ! $lead->exists;
         $lead->fill([
             'name' => $d['name'], 'phone' => $d['phone'], 'email' => $email, 'city' => $d['city'] ?? $lead->city,
             'source' => 'chatbot', 'ip' => $r->ip(),
             'message' => 'Started a chat with the AI assistant'.(! empty($d['interest']) ? '. Interested in: '.$d['interest'] : '').'.',
         ])->save();
         $r->session()->put('assistant.lead_id', $lead->id);
-
-        if (! Setting::bool('assistant.otp_required', true)) {
-            return $this->grant($r, $lead);
-        }
-
-        // OTP rules: 60s resend cooldown, max 3 codes per email per hour.
-        $recent = AssistantOtp::where('email', $email)->where('created_at', '>=', now()->subHour())->orderByDesc('id')->get();
-        if ($recent->first() && $recent->first()->created_at->diffInSeconds(now()) < 60) {
-            return response()->json(['message' => 'Please wait a minute before requesting another code.', 'retry_after' => 60 - (int) $recent->first()->created_at->diffInSeconds(now())], 429);
-        }
-        if ($recent->count() >= 3) {
-            return response()->json(['message' => 'Too many codes requested. Please try again in an hour.'], 429);
-        }
-
-        $code = (string) random_int(100000, 999999);
-        AssistantOtp::create(['lead_id' => $lead->id, 'email' => $email, 'code_hash' => $this->hash($code), 'expires_at' => now()->addMinutes(10), 'ip' => $r->ip()]);
-
-        try {
-            $site = Setting::get('site.name', config('app.name'));
-            Mail::raw("Hi {$lead->name},\n\nYour verification code for the $site assistant is: $code\n\nIt is valid for 10 minutes. If you didn't request it, you can ignore this email.", fn ($m) => $m->to($email)->subject("Your $site verification code: $code"));
-        } catch (\Throwable $e) {
-            Log::warning('Assistant OTP mail failed: '.$e->getMessage());
-            return response()->json(['message' => "We couldn't send the verification email. Please check the address and try again."], 503);
-        }
-
-        return response()->json(['ok' => true, 'otp' => true, 'email' => $this->mask($email)]);
-    }
-
-    public function verify(Request $r)
-    {
-        $d = $r->validate(['code' => ['required', 'digits:6']]);
-        $lead = Lead::find($r->session()->get('assistant.lead_id'));
-        if (! $lead) return response()->json(['message' => 'Your session expired. Please start again.', 'restart' => true], 422);
-
-        $otp = AssistantOtp::where('lead_id', $lead->id)->latest('id')->first();
-        if (! $otp || $otp->expires_at->isPast()) return response()->json(['message' => 'That code has expired. Please request a new one.', 'expired' => true], 422);
-        if ($otp->attempts >= 5) return response()->json(['message' => 'Too many wrong attempts. Please request a new code.', 'expired' => true], 422);
-
-        if (! hash_equals($otp->code_hash, $this->hash($d['code']))) {
-            $otp->increment('attempts');
-            return response()->json(['message' => 'Incorrect code. '.max(0, 4 - $otp->attempts).' attempt(s) left.'], 422);
-        }
-
-        $first = ! $lead->email_verified_at;
-        $lead->forceFill(['email_verified_at' => now()])->save();
-        $otp->delete();
-        if ($first) LeadNotifier::notify($lead);
+        if ($isNew) LeadNotifier::notify($lead);
 
         return $this->grant($r, $lead);
     }
@@ -131,14 +88,11 @@ class AssistantLeadController extends Controller
 
     private function grant(Request $r, Lead $lead)
     {
-        // A returning visitor keeps their one row (so limits cannot be reset by re-registering). A new one keeps the anonymous
-        // session they were already chatting in, so the conversation and its memory carry over once they sign up.
-        $s = AssistantSession::where('lead_id', $lead->id)->first();
-        if (! $s) {
-            $anon = $this->resolve($r);
-            $s = $anon && ! $anon->lead_id ? $anon : new AssistantSession(['token' => Str::random(40)]);
-            $s->lead_id = $lead->id;
-        }
+        // Without an email code, an existing session is never handed to someone who only typed that email: this browser's own
+        // anonymous session (kept with its conversation and limits) becomes the lead's session, or a fresh one is created.
+        $s = $this->resolve($r);
+        if (! $s || ($s->lead_id && $s->lead_id !== $lead->id)) $s = new AssistantSession(['token' => Str::random(40)]);
+        $s->lead_id = $lead->id;
         $s->fill(['ip' => $r->ip(), 'user_agent' => Str::limit((string) $r->userAgent(), 250, '')])->save();
         $r->session()->put('assistant.token', $s->token);
 
@@ -151,11 +105,4 @@ class AssistantLeadController extends Controller
         return $t !== '' ? AssistantSession::where('token', $t)->with('lead')->first() : null;
     }
 
-    private function hash(string $code): string { return hash_hmac('sha256', $code, (string) config('app.key')); }
-
-    private function mask(string $email): string
-    {
-        [$u, $d] = explode('@', $email) + [1 => ''];
-        return Str::substr($u, 0, 2).str_repeat('*', max(1, strlen($u) - 2)).'@'.$d;
-    }
 }

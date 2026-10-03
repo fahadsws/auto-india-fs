@@ -14,6 +14,108 @@
   const burger = $('#burger'), nav = $('#nav');
   burger && burger.addEventListener('click', () => nav.classList.toggle('open'));
 
+  /* ---------- mobile menu ---------- */
+  const mb = $('#mb'), menu = $('#menu');
+  mb && menu && mb.addEventListener('click', () => { const open = menu.hidden; menu.hidden = !open; mb.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+
+  /* ---------- shared helpers: reCAPTCHA token + the visitor's current location ---------- */
+  const lsx = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
+  const rcKey = (($('meta[name=recaptcha-site-key]') || {}).content || '');
+  const AIC = window.AIC = window.AIC || {};
+  // Invisible reCAPTCHA v3: resolves to a token, or '' when no key is configured / it could not load (the server decides what to do).
+  AIC.recaptcha = action => new Promise(res => {
+    if (!rcKey) return res('');
+    let done = false; const fin = t => { if (!done) { done = true; res(t || ''); } };
+    setTimeout(() => fin(''), 6000);
+    const go = () => { try { grecaptcha.ready(() => grecaptcha.execute(rcKey, { action }).then(fin, () => fin(''))); } catch (e) { fin(''); } };
+    if (window.grecaptcha && grecaptcha.ready) go(); else { let n = 0; const t = setInterval(() => { if (window.grecaptcha && grecaptcha.ready) { clearInterval(t); go(); } else if (++n > 40) { clearInterval(t); fin(''); } }, 150); }
+  });
+
+  // One saved location for the whole site: { city, lat, lng, src: 'gps' | 'manual', ts }.
+  const LKEY = 'aic_loc', cityEl = $('#city'), locBox = $('#loc'), locList = $('#cl'), modal = $('#cm');
+  const readLoc = () => { try { return JSON.parse(lsx.get(LKEY) || 'null'); } catch (e) { return null; } };
+  AIC.loc = readLoc();
+  AIC.city = () => (AIC.loc && AIC.loc.city) || '';
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+  // Fill every place that asks for a city (anything marked data-loc-city, plus the city field of any form) unless the visitor already typed there.
+  function fillCity() {
+    const c = AIC.city(); if (!c) return;
+    document.querySelectorAll('[data-loc-city], input[name=city], select[name=city]').forEach(el => {
+      if (el.dataset.touched === '1' || el.dataset.locOff !== undefined) return;
+      if (el.tagName === 'SELECT') {
+        const o = Array.from(el.options).find(x => norm(x.value) === norm(c) || norm(x.textContent) === norm(c));
+        if (o && el.value !== o.value) { el.value = o.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      } else if (!el.value || el.dataset.locFilled === '1') {
+        if (el.value !== c) { el.value = c; el.dataset.locFilled = '1'; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+    });
+  }
+  document.addEventListener('input', e => { const t = e.target; if (t && t.matches && t.matches('[data-loc-city], input[name=city], select[name=city]')) { t.dataset.touched = '1'; t.dataset.locFilled = ''; } }, true);
+  document.addEventListener('change', e => { const t = e.target; if (t && t.matches && t.matches('select[name=city]') && e.isTrusted) t.dataset.touched = '1'; }, true);
+  function setLoc(l, src) {
+    AIC.loc = Object.assign({}, l, { src: src || l.src || 'manual', ts: Date.now() });
+    lsx.set(LKEY, JSON.stringify(AIC.loc));
+    if (cityEl) cityEl.textContent = AIC.loc.city;
+    fillCity();
+    document.dispatchEvent(new CustomEvent('aic:loc', { detail: AIC.loc }));
+  }
+  AIC.setLoc = setLoc; AIC.fillCity = fillCity;
+  // Browser coordinates -> city (server maps it to the nearest listed city or asks OpenStreetMap).
+  AIC.detect = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('unsupported'));
+    navigator.geolocation.getCurrentPosition(async p => {
+      try {
+        const r = await fetch('/location/resolve?lat=' + p.coords.latitude.toFixed(4) + '&lng=' + p.coords.longitude.toFixed(4), { headers: { Accept: 'application/json' } });
+        if (!r.ok) throw new Error('resolve'); const d = await r.json();
+        setLoc({ city: d.city, lat: d.lat, lng: d.lng }, 'gps'); resolve(AIC.loc);
+      } catch (e) { reject(e); }
+    }, err => reject(err), { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
+  });
+
+  let cityList = null;
+  async function cities() { if (cityList) return cityList; try { cityList = await (await fetch('/location/cities')).json(); } catch (e) { cityList = ['Delhi', 'Mumbai', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad']; } return cityList; }
+  const pick = city => { setLoc({ city }, 'manual'); closeUi(); };
+  function closeUi() { locBox && locBox.classList.remove('open'); lb && lb.setAttribute('aria-expanded', 'false'); modal && (modal.classList.remove('show'), modal.hidden = true); }
+  const lb = $('#lb');
+  async function paintList(box, withCur) {
+    const list = await cities(), cur = AIC.city();
+    box.innerHTML = (withCur ? '<button type="button" class="cur" data-act="detect">📍 Use my current location' + (cur ? ' <small style="font-weight:500;color:var(--ink2)">(' + cur + ')</small>' : '') + '</button>' : '')
+      + list.map(c => '<button type="button" data-city="' + c.replace(/"/g, '') + '">' + c + '</button>').join('');
+  }
+  lb && lb.addEventListener('click', async e => { e.stopPropagation(); const open = !locBox.classList.contains('open'); if (open) await paintList(locList, true); locBox.classList.toggle('open', open); lb.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+  document.addEventListener('click', e => { if (locBox && !locBox.contains(e.target)) locBox.classList.remove('open'); });
+  locList && locList.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.city) return pick(b.dataset.city);
+    if (b.dataset.act === 'detect') { b.textContent = 'Detecting…'; try { await AIC.detect(); closeUi(); } catch (er) { b.textContent = 'Could not detect - pick a city below'; } }
+  });
+  // First-visit dialog: only shown when automatic detection is not possible (permission denied / unsupported).
+  function openModal(msg) {
+    if (!modal) return; try { if (sessionStorage.getItem('aic_modal')) return; sessionStorage.setItem('aic_modal', '1'); } catch (e) {}
+    modal.hidden = false; requestAnimationFrame(() => modal.classList.add('show'));
+    const er = $('#cm-err'); if (er) er.textContent = msg || '';
+  }
+  if (modal) {
+    modal.hidden = true;
+    $('#cm-x') && $('#cm-x').addEventListener('click', closeUi);
+    modal.addEventListener('click', e => { if (e.target === modal) closeUi(); });
+    $('#cm-go') && $('#cm-go').addEventListener('click', async () => { const er = $('#cm-err'); er.textContent = ''; try { await AIC.detect(); closeUi(); } catch (e) { er.textContent = 'We could not detect your location. Please pick your city below.'; $('#cm-man').click(); } });
+    $('#cm-man') && $('#cm-man').addEventListener('click', async () => { const box = $('#cm-cities'); await paintList(box, false); box.hidden = false; $('#cm-man').setAttribute('aria-expanded', 'true'); });
+    $('#cm-cities') && $('#cm-cities').addEventListener('click', e => { const b = e.target.closest('button[data-city]'); if (b) pick(b.dataset.city); });
+  }
+  // Automatic: use the saved place; otherwise ask the browser for the current location once and keep it.
+  (async function autoLocate() {
+    if (AIC.loc && AIC.loc.city) { if (cityEl) cityEl.textContent = AIC.loc.city; fillCity(); document.dispatchEvent(new CustomEvent('aic:loc', { detail: AIC.loc })); }
+    const stale = AIC.loc && AIC.loc.src === 'gps' && Date.now() - (AIC.loc.ts || 0) > 7 * 864e5;
+    if (AIC.loc && AIC.loc.city && !stale) return;
+    let state = 'prompt'; try { state = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch (e) {}
+    if (AIC.loc && AIC.loc.city && state !== 'granted') return;       // stale and would need a prompt: keep what we have
+    if (state === 'denied') return openModal('');
+    try { await AIC.detect(); } catch (e) { if (!(AIC.loc && AIC.loc.city)) openModal(''); }
+  })();
+  // A form field the visitor focuses late (widgets built after load) still gets the city.
+  document.addEventListener('focusin', e => { if (AIC.city() && e.target && e.target.matches && e.target.matches('[data-loc-city], input[name=city], select[name=city]')) fillCity(); });
+
   /* ---------- assistant ---------- */
   const ag = $('#ag'); if (!ag) return;
   const $$ = (s, r = ag) => Array.from(r.querySelectorAll(s));
@@ -21,7 +123,7 @@
   const name = ag.dataset.name, page = ag.dataset.mode === 'page';
   const el = { panel: $('#agPanel'), msgs: $('#agMsgs'), hero: $('#agHero'), form: $('#agForm'), text: $('#agText'), mic: $('#agMic'), status: $('#agStatus'), speak: $('#agSpeak'),
     fab: $('#agFab'), tip: $('#agTip'), left: $('#agLeft'), hello: $('#agHello') };
-  const views = { load: $('#vLoad'), lead: $('#vLead'), otp: $('#vOtp'), chat: $('#vChat'), fb: $('#vFb') };
+  const views = { load: $('#vLoad'), lead: $('#vLead'), chat: $('#vChat'), fb: $('#vFb') };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false, queued = null, freeLeft = null;
   let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'en', cid = '';
@@ -31,7 +133,7 @@
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
   // Widget text is English; the assistant itself mirrors the visitor's language (English / Hindi / Hinglish).
-  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please check your internet and try again.', wrong: 'Something went wrong on our side. Please try again in a moment.', expired: 'Your session has expired. Please refresh the page and try again.', toofast: 'You are sending messages too quickly. Please wait a moment.', free: n => n > 0 ? n + ' free message' + (n === 1 ? '' : 's') + ' left' : '', gateNote: 'To continue chatting, please share your details once. It takes less than a minute.', tabNew: 'New car', tabUsed: 'Used car', tabSell: 'Sell my car', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
+  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', conn: 'Connection problem. Please check your internet and try again.', wrong: 'Something went wrong on our side. Please try again in a moment.', expired: 'Your session has expired. Please refresh the page and try again.', toofast: 'You are sending messages too quickly. Please wait a moment.', free: n => n > 0 ? n + ' free message' + (n === 1 ? '' : 's') + ' left' : '', gateNote: 'To continue chatting, please share your details once. It takes less than a minute.', tabNew: 'New car', tabUsed: 'Used car', tabSell: 'Sell my car', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
   const tr = k => T.en[k];
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -128,41 +230,12 @@
     if (!/^[6-9]\d{9}$/.test(v.phone)) return bad('phone', tr('phone'));
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.email || '').trim())) return bad('email', tr('email'));
     const btn = $('button[type=submit]', fLead); btn.disabled = true;
-    const r = await api(ag.dataset.lead, v).catch(() => ({ ok: false, data: { message: tr('conn') } }));
+    v.recaptcha = await AIC.recaptcha('assistant_lead');          // invisible check - nothing for the visitor to solve
+    const r = await api(ag.dataset.lead, v).catch(() => ({ ok: false, status: 0, data: {} }));
     btn.disabled = false;
     if (!r.ok) { eLead.textContent = errText(r); return; }
-    if (r.data.verified) return enter(r.data);
-    $('#otpMail').textContent = r.data.email || v.email;
-    show('otp'); startResend(60); $('#otpBoxes input').focus();
-  });
-
-  /* ---------- step 2: email OTP ---------- */
-  const boxes = $$('#otpBoxes input'), eOtp = $('#eOtp'), resend = $('#otpResend');
-  boxes.forEach((b, i) => {
-    b.addEventListener('input', () => { b.value = b.value.replace(/\D/g, '').slice(-1); if (b.value && boxes[i + 1]) boxes[i + 1].focus(); if (boxes.every(x => x.value)) views.otp.requestSubmit(); });
-    b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && boxes[i - 1]) boxes[i - 1].focus(); });
-    b.addEventListener('paste', e => { const t = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!t) return; e.preventDefault(); t.split('').forEach((c, j) => boxes[j] && (boxes[j].value = c)); (boxes[Math.min(t.length, 5)]).focus(); if (t.length === 6) views.otp.requestSubmit(); });
-  });
-  let rt = null;
-  function startResend(sec) { clearInterval(rt); resend.disabled = true; const tick = () => { resend.textContent = tr('resend')(sec); if (sec-- <= 0) { clearInterval(rt); resend.disabled = false; } }; tick(); rt = setInterval(tick, 1000); }
-  views.otp.addEventListener('submit', async e => {
-    e.preventDefault(); eOtp.textContent = '';
-    const code = boxes.map(b => b.value).join(''); if (code.length < 6) { eOtp.textContent = tr('code6'); return; }
-    const btn = $('button[type=submit]', views.otp); btn.disabled = true;
-    const r = await api(ag.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: tr('conn') } }));
-    btn.disabled = false;
-    if (!r.ok) {
-      eOtp.textContent = errText(r); const w = $('#otpBoxes'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
-      boxes.forEach(b => b.value = ''); boxes[0].focus(); if (r.data.restart) showLead(); return;
-    }
     enter(r.data);
   });
-  resend.addEventListener('click', async () => {
-    const v = Object.fromEntries(new FormData(fLead).entries()); v.phone = (v.phone || '').replace(/\D/g, '');
-    resend.disabled = true; const r = await api(ag.dataset.lead, v).catch(() => null);
-    if (r && r.ok) { eOtp.textContent = ''; boxes.forEach(b => b.value = ''); boxes[0].focus(); startResend(60); } else { eOtp.textContent = r ? firstError(r.data) : tr('conn'); startResend(r && r.data.retry_after || 30); }
-  });
-  $('#otpBack').addEventListener('click', () => showLead());
 
   /* ---------- chat: everything visible is kept in `items` (sessionStorage) so the conversation survives refresh and page changes ---------- */
   let items = [], visitorPhone = '', visitorCity = '';
@@ -272,7 +345,7 @@
     if (busy) return;
     clearChips(); busy = true; ag.classList.add('busy');
     add('user', { new: tr('tabNew'), used: tr('tabUsed'), sell: tr('tabSell') }[intent]); const t = typing();
-    let r; try { r = await api(ag.dataset.chat, { intent, cid }); } catch (err) { r = { ok: false, status: 0, data: {} }; }
+    let r; try { r = await api(ag.dataset.chat, { intent, cid, city: AIC.city() }); } catch (err) { r = { ok: false, status: 0, data: {} }; }
     t.remove(); busy = false; ag.classList.remove('busy');
     if (!r.ok) { add('err', errText(r)); return; }
     const d = r.data; if (d.token && !token) { token = d.token; store.set('aw_token', token); }

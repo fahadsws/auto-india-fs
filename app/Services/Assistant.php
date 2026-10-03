@@ -283,7 +283,7 @@ class Assistant
      * First-step tabs ("New car" / "Used car" / "Sell my car"): answered without the AI. The choice is stored in the conversation
      * memory, so everything the visitor says next is searched in that category and never drifts to the other one.
      */
-    public function choose(string $intent, AssistantSession $session): array
+    public function choose(string $intent, AssistantSession $session, string $city = ''): array
     {
         $m = AssistantMemory::get($session);
         $turns = $m['turns'] ?? 0;
@@ -298,7 +298,9 @@ class Assistant
         } elseif ($intent === 'used') {
             $m['f'] = ['type' => 'used', 'vehicle' => 'car']; $m['ask'] = 'city'; $m['asked'] = ['city'];
             $answer = 'Used cars it is. Which city should I search in?';
-            foreach (array_slice(array_map(fn ($c) => is_array($c) ? ($c['name'] ?? '') : $c, \App\Support\Filters::CITIES), 0, 6) as $c) if ($c !== '') $chips[] = ['label' => $c, 'q' => "used cars in $c"];
+            $city = trim(preg_replace('/[^\p{L}\s.\-]/u', '', $city));
+            if ($city !== '') { $answer = "Used cars it is. Shall I search in $city, or another city?"; $chips[] = ['label' => $city, 'q' => "used cars in $city"]; }
+            foreach (array_slice(array_map(fn ($c) => is_array($c) ? ($c['name'] ?? '') : $c, \App\Support\Filters::CITIES), 0, 6) as $c) if ($c !== '' && strcasecmp($c, $city) !== 0) $chips[] = ['label' => $c, 'q' => "used cars in $c"];
             $chips[] = ['label' => 'Anywhere', 'q' => 'Anywhere'];
         } else {   // sell
             $m['f'] = []; $m['ask'] = null;
