@@ -169,8 +169,11 @@
       () => status('Location permission was denied. Please search by city instead.', true), { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
   });
   ensureMap(20.59, 78.96); if (map) map.setView([22.5, 79], 4);
-  // Convenience: start from the city the visitor chose in the site header, if there is one.
-  try { const c = localStorage.getItem('city'); if (c && !$('#evQ').value) $('#evQ').value = c; } catch (e) {}
+  // Start from the visitor's detected / chosen location (site header): search around it automatically, once.
+  let auto = false;
+  const useSaved = l => { if (auto || !l || busy) return; auto = true; $('#evQ').value = l.city || ''; if (l.lat && l.lng) lookup(l.lat, l.lng, l.city); else if (l.city) byName(l.city); };
+  if (window.AIC && AIC.loc) useSaved(AIC.loc);
+  document.addEventListener('aic:loc', e => useSaved(e.detail));
 })();
 </script>
 @endsection

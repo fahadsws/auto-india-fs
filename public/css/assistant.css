@@ -196,4 +196,5 @@ html[data-theme=dark] .aw-btn{background:#fff;color:#000}
   #agExpand{display:none}
   .aw-page .aw-panel{height:78dvh;border-radius:22px}
 }
-@media (prefers-reduced-motion:reduce){.aw *,.aw *::before,.aw *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media (prefers-reduced-motion:reduce){.aw *,.aw *::before,.aw *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}.rc-note{display:block;margin-top:6px;font-size:11px;line-height:1.4;color:var(--aw-mut)}
+.rc-note a{color:inherit;text-decoration:underline}

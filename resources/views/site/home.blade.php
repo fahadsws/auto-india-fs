@@ -353,19 +353,17 @@
                 </div>
                 <a href="{{ url($vb['path']) }}">See all new {{ strtolower($vb['label']) }}</a>
             </div>
-            <ul class="rows">
+            <div class="lc">
                 @foreach($vb['launched'] as $car)
-                    <li><a href="{{ $car->url }}"><img src="{{ $car->hero_url }}" alt="" loading="lazy">
-                            <div><span class="m">{{ $car->brand }}</span>
-                                <p class="name">{{ $car->name }}<span class="nl">{{ $car->status_label }}</span></p>
-                            </div>
-                            <p class="sp m">
-                                {{ implode(', ', $car->fuel_types) }}{{ $car->body_type ? ' · ' . $car->body_type : '' }}
-                            </p>
-                            <p class="pr"><small>From</small>{{ $car->price_label }}</p>
-                        </a></li>
+                    <a href="{{ $car->url }}" aria-label="{{ $car->full_name }}">
+                        <div class="lc-top"><span class="lc-brand">{{ $car->brand }}</span><span class="lc-tag">{{ $car->status_label ?: 'New' }}</span></div>
+                        <div class="lc-img"><img src="{{ $car->hero_url }}" alt="" loading="lazy"></div>
+                        <b class="lc-name">{{ $car->name }}</b>
+                        <p class="lc-spec">{{ implode(' · ', array_filter([implode(', ', $car->fuel_types), $car->body_type])) }}</p>
+                        <div class="lc-foot"><p class="lc-pr"><small>From</small>{{ $car->price_label }}</p><span class="lc-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg></span></div>
+                    </a>
                 @endforeach
-            </ul>
+            </div>
         </section>
     @endif
     @endforeach

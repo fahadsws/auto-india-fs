@@ -18,13 +18,7 @@ use Illuminate\Support\Facades\Log;
 class EvStationController extends Controller
 {
     /** Quick city centres (lat, lng) - avoids a geocoding call for the common cities. */
-    public const CITIES = [
-        'Delhi' => [28.6139, 77.2090], 'Mumbai' => [19.0760, 72.8777], 'Bengaluru' => [12.9716, 77.5946], 'Hyderabad' => [17.3850, 78.4867],
-        'Chennai' => [13.0827, 80.2707], 'Kolkata' => [22.5726, 88.3639], 'Pune' => [18.5204, 73.8567], 'Ahmedabad' => [23.0225, 72.5714],
-        'Jaipur' => [26.9124, 75.7873], 'Lucknow' => [26.8467, 80.9462], 'Chandigarh' => [30.7333, 76.7794], 'Kochi' => [9.9312, 76.2673],
-        'Indore' => [22.7196, 75.8577], 'Surat' => [21.1702, 72.8311], 'Gurugram' => [28.4595, 77.0266], 'Noida' => [28.5355, 77.3910],
-        'Bhopal' => [23.2599, 77.4126], 'Nagpur' => [21.1458, 79.0882], 'Coimbatore' => [11.0168, 76.9558], 'Visakhapatnam' => [17.6868, 83.2185],
-    ];
+    public const CITIES = \App\Support\Cities::ALL;
 
     private const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 

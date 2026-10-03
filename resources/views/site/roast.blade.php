@@ -24,7 +24,7 @@
   <div class="article-wrap emi-wrap">
     <div>
       <div class="rst" id="rst" data-me="{{ route('assistant.me') }}" data-lead="{{ route('assistant.lead') }}"
-        data-verify="{{ route('assistant.verify') }}" data-roast="{{ route('roast.run') }}" data-url="{{ route('roast') }}"
+        data-roast="{{ route('roast.run') }}" data-url="{{ route('roast') }}"
         data-site="{{ parse_url(config('app.url') ?: url('/'), PHP_URL_HOST) }}">
 
         <header class="rst-hero">
@@ -42,29 +42,21 @@
 
         <form class="rst-view rst-panel" id="vLead" novalidate autocomplete="on">
           <h2>Roast jaari rakhne ke liye details do</h2>
-          <p class="rst-sub">Free roasts khatam ho gaye. Ek baar details do aur email pe code verify karo — phir roast jaari rahega (din ke limit ke saath). Dobara form nahi poochhenge.</p>
+          <p class="rst-sub">Free roasts khatam ho gaye. Ek baar details do — phir roast jaari rahega (din ke limit ke saath). Dobara form nahi poochhenge.</p>
           <div class="rst-row">
             <label class="rst-f"><span>Poora naam</span><input name="name" autocomplete="name" maxlength="60" placeholder="Rahul Sharma" required></label>
             <label class="rst-f"><span>Mobile</span><div class="rst-ph"><b>+91</b><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required></div></label>
           </div>
           <div class="rst-row">
-            <label class="rst-f"><span>Email <em>(verification code aayega)</em></span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
+            <label class="rst-f"><span>Email </span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
             <label class="rst-f"><span>City <em>(optional)</em></span><input name="city" list="rstCities" autocomplete="address-level2" maxlength="80" placeholder="Aapka sheher"><datalist id="rstCities">@foreach (\App\Support\Filters::CITIES as $c)<option value="{{ is_array($c) ? ($c['name'] ?? '') : $c }}">@endforeach</datalist></label>
           </div>
           <input class="rst-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <div class="rst-err" id="eLead" role="alert"></div>
-          <button class="rst-btn" type="submit"><span>Code bhejo</span> <i>→</i></button>
-          <p class="rst-fine">🔒 Details sirf aapki madad ke liye hain, kisi ko bechi nahi jaatin.</p>
+          <button class="rst-btn" type="submit"><span>Aage badho</span> <i>→</i></button>
+          <p class="rst-fine">🔒 Details sirf aapki madad ke liye hain, kisi ko bechi nahi jaatin. @include('site.partials.recaptcha-note')</p>
         </form>
 
-        <form class="rst-view rst-panel" id="vOtp" novalidate>
-          <h2>Email check karo 📬</h2>
-          <p class="rst-sub"><b id="otpMail"></b> pe 6 ank ka code gaya hai.</p>
-          <div class="rst-otp" id="otpBoxes">@for ($i = 0; $i < 6; $i++)<input inputmode="numeric" maxlength="1" autocomplete="{{ $i ? 'off' : 'one-time-code' }}" aria-label="Digit {{ $i + 1 }}">@endfor</div>
-          <div class="rst-err" id="eOtp" role="alert"></div>
-          <button class="rst-btn" type="submit"><span>Verify karo &amp; roast shuru</span> <i>→</i></button>
-          <p class="rst-fine"><button type="button" class="rst-lnk" id="otpResend" disabled>Code dobara bhejo</button> · <button type="button" class="rst-lnk" id="otpBack">Details badlo</button></p>
-        </form>
 
         {{-- 2) the tool --}}
         <form class="rst-view rst-panel rst-tool" id="vTool" novalidate autocomplete="off">
@@ -142,7 +134,7 @@
   const csrf = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
   let token = store.get('aw_token') || '', visitor = '', card = null, last = null, busy = false, queuedRun = false;
-  const views = { wait: $('#vWait'), lead: $('#vLead'), otp: $('#vOtp'), tool: $('#vTool'), load: $('#vLoad'), res: $('#vRes') };
+  const views = { wait: $('#vWait'), lead: $('#vLead'), tool: $('#vTool'), load: $('#vLoad'), res: $('#vRes') };
   const show = v => { Object.entries(views).forEach(([k, n]) => n.classList.toggle('show', k === v)); };
   const api = async (url, body) => {
     const r = await fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
@@ -173,7 +165,7 @@
     else enter((r && r.ok && r.data) || {});                                                                              // verified, or still within the free roasts
   })();
 
-  /* ---------- lead form + email OTP (same endpoints as the assistant) ---------- */
+  /* ---------- lead form (same endpoint as the assistant; invisible reCAPTCHA, no email code) ---------- */
   const fLead = views.lead, eLead = $('#eLead');
   fLead.addEventListener('submit', async e => {
     e.preventDefault(); eLead.textContent = '';
@@ -185,31 +177,12 @@
     if (!/^[6-9]\d{9}$/.test(v.phone)) return bad('phone', '10 ank ka sahi mobile number daalo.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.email || '').trim())) return bad('email', 'Sahi email daalo.');
     const btn = $('button[type=submit]', fLead); btn.disabled = true;
+    v.recaptcha = await (window.AIC ? AIC.recaptcha('assistant_lead') : Promise.resolve(''));   // invisible check
     const r = await api(root.dataset.lead, v).catch(() => ({ ok: false, data: { message: 'Connection problem. Dobara try karo.' } }));
     btn.disabled = false;
     if (!r.ok) { eLead.textContent = firstError(r.data); return; }
-    if (r.data.verified) return enter(r.data);
-    $('#otpMail').textContent = r.data.email || v.email;
-    show('otp'); startResend(60); $('#otpBoxes input').focus();
-  });
-  const boxes = $$('#otpBoxes input'), eOtp = $('#eOtp'), resend = $('#otpResend'); let rt = null;
-  boxes.forEach((b, i) => {
-    b.addEventListener('input', () => { b.value = b.value.replace(/\D/g, '').slice(-1); if (b.value && boxes[i + 1]) boxes[i + 1].focus(); if (boxes.every(x => x.value)) views.otp.requestSubmit(); });
-    b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && boxes[i - 1]) boxes[i - 1].focus(); });
-    b.addEventListener('paste', e => { const t = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!t) return; e.preventDefault(); t.split('').forEach((c, j) => boxes[j] && (boxes[j].value = c)); boxes[Math.min(t.length, 5)].focus(); if (t.length === 6) views.otp.requestSubmit(); });
-  });
-  function startResend(s) { clearInterval(rt); resend.disabled = true; const tick = () => { resend.textContent = s > 0 ? 'Code dobara bhejo (' + s + 's)' : 'Code dobara bhejo'; if (s <= 0) { resend.disabled = false; clearInterval(rt); } s--; }; tick(); rt = setInterval(tick, 1000); }
-  views.otp.addEventListener('submit', async e => {
-    e.preventDefault(); eOtp.textContent = '';
-    const code = boxes.map(b => b.value).join(''); if (code.length !== 6) { eOtp.textContent = '6 ank ka code daalo.'; return; }
-    const btn = $('button[type=submit]', views.otp); btn.disabled = true;
-    const r = await api(root.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: 'Connection problem. Dobara try karo.' } }));
-    btn.disabled = false;
-    if (!r.ok) { eOtp.textContent = firstError(r.data); boxes.forEach(b => b.value = ''); boxes[0].focus(); if (r.data.restart) show('lead'); return; }
     enter(r.data);
   });
-  resend.addEventListener('click', async () => { const v = Object.fromEntries(new FormData(fLead).entries()); v.phone = (v.phone || '').replace(/\D/g, ''); resend.disabled = true; const r = await api(root.dataset.lead, v).catch(() => null); if (r && r.ok) startResend(60); else { eOtp.textContent = r ? firstError(r.data) : 'Connection problem.'; resend.disabled = false; } });
-  $('#otpBack').addEventListener('click', () => show('lead'));
 
   /* ---------- the tool ---------- */
   const val = id => { const g = $(id + ' .on'); return g ? g.dataset.v : ''; };

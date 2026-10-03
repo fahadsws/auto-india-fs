@@ -11,7 +11,7 @@
     <form method="POST" action="{{ route('sell.submit') }}">@csrf
       <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off">
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px"><div class="field"><label>Your name</label><input name="name" value="{{ old('name') }}" required></div><div class="field"><label>Phone</label><input name="phone" type="tel" value="{{ old('phone') }}" required></div></div>
-      <div class="field"><label>Email (optional)</label><input name="email" type="email" value="{{ old('email') }}"></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px"><div class="field"><label>Email (optional)</label><input name="email" type="email" value="{{ old('email') }}"></div><div class="field"><label>City</label><input name="city" data-loc-city value="{{ old('city') }}" maxlength="80" autocomplete="address-level2" placeholder="Detected automatically"></div></div>
       <div class="field"><label>About your car</label><textarea name="message" rows="5" required placeholder="Make, model, year, km driven, city, expected price…">{{ old('message') }}</textarea></div>
       <button class="go btn-block"><i class="ti ti-send"></i> Request a call back</button>
     </form>

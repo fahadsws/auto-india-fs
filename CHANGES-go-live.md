@@ -32,3 +32,16 @@
 1. `php artisan migrate` (adds the Tools menu).
 2. Optionally adjust the free-message settings.
 3. The server must reach `overpass-api.de` and `nominatim.openstreetmap.org` (EV finder); visitors' browsers load the map from `unpkg.com` and `tile.openstreetmap.org`.
+
+# Follow-up: location, reCAPTCHA instead of OTP, "Just launched" cards
+
+## Current location, detected automatically
+- `site.js` now owns one saved location (`localStorage.aic_loc`: city, lat, lng). On the first visit the browser's current location is requested and turned into a city (`/location/resolve`: nearest listed city, else OpenStreetMap reverse geocoding, cached). If the visitor blocks it, the existing "Where are you buying?" dialog opens once so they can pick a city. The header city button now works (list, "Use my current location", manual pick); the previously missing mobile-menu toggle was added too.
+- Used everywhere a city is needed: any input/select with `data-loc-city` (or `name="city"`) is filled automatically unless the visitor already typed there - lead forms ("Get best offers"), assistant form, mechanic vehicle details, new city field on the Sell page; the EV finder searches around the saved location by itself; the assistant's Used-car tab offers the detected city first. For a **service-center** search box, just add `data-loc-city` to its input.
+
+## reCAPTCHA instead of email OTP
+- The details form no longer sends or asks for an email code. Invisible Google reCAPTCHA v3 protects it (assistant, mechanic and roast share the endpoint). Add the keys in Admin -> Settings -> Assistant & voice (`reCAPTCHA v3 site key`, `secret key`, minimum score 0.5). With no keys saved the check is skipped (honeypot and rate limits still apply).
+- `/assistant/verify` and the OTP screens were removed. An existing email never hands over another browser's session (the browser's own session becomes the lead's session).
+
+## "Just launched" cards
+- The row list became a card grid like the other home sections: brand + status chip, image on a soft red-glow panel, name, fuel/body line, "From" price and an arrow button; 2 columns on phones.

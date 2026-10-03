@@ -40,6 +40,8 @@ Route::get('/roast-my-car', [Site\RoastController::class, 'page'])->name('roast'
 Route::post('/roast-my-car/roast', [Site\RoastController::class, 'roast'])->middleware(['throttle:roast', 'assistant.session'])->name('roast.run');
 Route::get('/online-mechanic', [Site\MechanicController::class, 'page'])->name('mechanic');
 Route::post('/online-mechanic/chat', [Site\MechanicController::class, 'chat'])->middleware(['throttle:mechanic', 'assistant.session:mechanic'])->name('mechanic.chat');
+Route::get('/location/cities', [Site\LocationController::class, 'cities'])->name('location.cities');
+Route::get('/location/resolve', [Site\LocationController::class, 'resolve'])->middleware('throttle:30,1')->name('location.resolve');
 Route::get('/e-challan', [Site\EChallanController::class, 'page'])->name('echallan');
 Route::get('/ev-charging-stations', [Site\EvStationController::class, 'page'])->name('evstations');
 Route::get('/ev-charging-stations/geocode', [Site\EvStationController::class, 'geocode'])->middleware('throttle:30,1')->name('evstations.geocode');
@@ -54,7 +56,6 @@ Route::get('/feed.xml', [Site\PageController::class, 'feed'])->name('feed');
 Route::get('/assistant', [Site\AssistantController::class, 'page'])->name('assistant');
 Route::get('/assistant/me', [Site\AssistantLeadController::class, 'me'])->middleware('throttle:assistant-me')->name('assistant.me');
 Route::post('/assistant/lead', [Site\AssistantLeadController::class, 'submit'])->middleware('throttle:assistant-lead')->name('assistant.lead');
-Route::post('/assistant/verify', [Site\AssistantLeadController::class, 'verify'])->middleware('throttle:assistant-verify')->name('assistant.verify');
 Route::post('/assistant/feedback', [Site\AssistantLeadController::class, 'feedback'])->middleware('throttle:assistant-feedback')->name('assistant.feedback');
 Route::post('/assistant/chat', [Site\AssistantController::class, 'chat'])->middleware(['throttle:assistant-chat', 'assistant.session'])->name('assistant.chat');
 Route::post('/assistant/reset', [Site\AssistantBookingController::class, 'reset'])->middleware(['throttle:assistant-reset', 'assistant.session'])->name('assistant.reset');

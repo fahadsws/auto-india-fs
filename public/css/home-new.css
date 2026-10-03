@@ -1078,6 +1078,144 @@
                 margin-left: 8px;
                 vertical-align: middle;
             }
+
+            /* just launched cards */
+            .lc {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 18px;
+            }
+            .lc a {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                padding: 16px 18px 16px;
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                background: #fff;
+                transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+            }
+            .lc a:hover {
+                transform: translateY(-4px);
+                border-color: var(--red);
+                box-shadow: 0 14px 30px -18px rgba(22, 24, 29, 0.45);
+            }
+            .lc-top {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+            }
+            .lc-brand {
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--ink2);
+            }
+            .lc-tag {
+                background: var(--red);
+                color: #fff;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 2px 9px;
+                border-radius: 99px;
+                white-space: nowrap;
+            }
+            .lc-img {
+                margin: 10px -6px 6px;
+                border-radius: 12px;
+                background: radial-gradient(ellipse at 50% 90%, rgba(217, 0, 0, 0.1), rgba(217, 0, 0, 0) 65%), var(--wash);
+                overflow: hidden;
+            }
+            .lc-img img {
+                display: block;
+                width: 100%;
+                aspect-ratio: 3/2;
+                object-fit: contain;
+                background: none;
+                transition: transform 0.35s;
+            }
+            .lc a:hover .lc-img img {
+                transform: scale(1.05);
+            }
+            .lc-name {
+                font-size: 22px;
+                font-stretch: 78%;
+                font-weight: 800;
+                line-height: 1.1;
+                margin-top: 4px;
+            }
+            .lc-spec {
+                margin-top: 4px;
+                font-size: 13px;
+                color: var(--ink2);
+                min-height: 20px;
+            }
+            .lc-foot {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 10px;
+                margin-top: auto;
+                padding-top: 12px;
+                border-top: 1px dashed var(--line);
+            }
+            .lc-pr {
+                font-size: 20px;
+                font-weight: 800;
+                font-stretch: 85%;
+                line-height: 1.15;
+            }
+            .lc-pr small {
+                display: block;
+                font-size: 11px;
+                font-weight: 500;
+                font-stretch: 100%;
+                color: var(--ink2);
+            }
+            .lc-go {
+                flex: none;
+                display: grid;
+                place-items: center;
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                background: var(--ink);
+                color: #fff;
+                transition: background 0.25s;
+            }
+            .lc-go svg {
+                width: 16px;
+                height: 16px;
+                fill: none;
+                stroke: currentColor;
+                stroke-width: 2.2;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+            }
+            .lc a:hover .lc-go {
+                background: var(--red);
+            }
+            @media (max-width: 560px) {
+                .lc {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 12px;
+                }
+                .lc a {
+                    padding: 12px;
+                }
+                .lc-name {
+                    font-size: 18px;
+                }
+                .lc-pr {
+                    font-size: 16px;
+                }
+                .lc-go {
+                    width: 30px;
+                    height: 30px;
+                }
+            }
             /* upcoming */
             .up {
                 display: grid;

@@ -84,6 +84,7 @@ class PageController extends Controller
             'name' => 'required|string|max:120',
             'phone' => 'required|string|min:8|max:20',
             'email' => 'nullable|email|max:150',
+            'city' => 'nullable|string|max:80',
             'message' => ($type === 'sell' ? 'required' : 'nullable').'|string|max:1500',
         ]);
         $lead = Lead::create($data + ['type' => $type, 'ip' => $r->ip()]);
