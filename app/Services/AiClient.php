@@ -47,7 +47,7 @@ class AiClient
     /** Recursively make every string valid UTF-8 (invalid bytes dropped, control characters removed). */
     public static function utf8(mixed $v): mixed
     {
-        if (is_array($v)) return array_map([self::class, 'utf8'], $v);
+        if (is_array($v)) { $o = []; foreach ($v as $k => $x) $o[is_string($k) ? self::utf8($k) : $k] = self::utf8($x); return $o; }   // keys too
         if (! is_string($v)) return $v;
         if (! mb_check_encoding($v, 'UTF-8')) {
             $fixed = @iconv('UTF-8', 'UTF-8//IGNORE', $v);

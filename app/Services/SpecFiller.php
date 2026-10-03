@@ -113,14 +113,21 @@ class SpecFiller
     private static function label(string $s): string
     {
         $s = AiClient::utf8($s);
-        $s = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8')), " \t:-–—•*");
+        $s = self::tidy($s);
         return mb_strlen($s) > 1 ? Str::ucfirst($s) : '';
     }
 
     private static function value(string $s): string
     {
+        return self::tidy($s);
+    }
+
+    /** Collapse whitespace and trim separator characters. Multi-byte safe: PHP's trim() with "–—•" would cut those characters' bytes in half. */
+    private static function tidy(string $s): string
+    {
         $s = AiClient::utf8($s);
-        return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8')), " \t:-–—•*");
+        $s = preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '';
+        return trim(preg_replace('/^[\s:\-–—•*]+|[\s:\-–—•*]+$/u', '', $s) ?? '');
     }
 
     /** Add pairs from $extra whose label (case-insensitive) is not already present. */
