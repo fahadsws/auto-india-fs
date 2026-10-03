@@ -142,4 +142,15 @@ class VehicleSpecsTest extends TestCase
         $this->assertNotEmpty($empty->fresh()->specs);
         $this->assertSame(['Engine' => 'x'], $full->fresh()->specs);   // only empty ones unless --all
     }
+
+    public function test_broken_utf8_in_a_page_never_stops_the_ai_request(): void
+    {
+        $bad = "Engine \xE2\x82 163 cc \xFF power \x07 16 bhp";
+        $this->assertTrue(mb_check_encoding(\App\Services\AiClient::utf8($bad), 'UTF-8'));
+        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::fake(['ai.test/*' => Http::response(['choices' => [['message' => ['content' => 'ok']]]])]);
+        $this->assertSame('ok', \App\Services\AiClient::chat([['role' => 'user', 'content' => $bad]]), \App\Services\AiClient::lastError() ?? '');
+        $s = SpecFiller::normalize(["Eng\xFFine" => "163 \xE2cc"]);
+        $this->assertSame('163 cc', reset($s));
+    }
 }

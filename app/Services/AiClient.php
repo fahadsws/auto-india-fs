@@ -44,6 +44,18 @@ class AiClient
         return $base;
     }
 
+    /** Recursively make every string valid UTF-8 (invalid bytes dropped, control characters removed). */
+    public static function utf8(mixed $v): mixed
+    {
+        if (is_array($v)) return array_map([self::class, 'utf8'], $v);
+        if (! is_string($v)) return $v;
+        if (! mb_check_encoding($v, 'UTF-8')) {
+            $fixed = @iconv('UTF-8', 'UTF-8//IGNORE', $v);
+            $v = $fixed !== false ? $fixed : mb_convert_encoding($v, 'UTF-8', 'UTF-8');
+        }
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $v) ?? '';
+    }
+
     /** Returns the assistant text, or null on failure / not configured (see lastError()). */
     public static function chat(array $messages, array $opts = []): ?string
     {
@@ -51,6 +63,7 @@ class AiClient
         self::$lastUsage = ['in' => 0, 'out' => 0];
         if (! self::configured()) { self::$lastError = 'AI provider is not configured'; return null; }
 
+        $messages = self::utf8($messages);   // page text can carry broken bytes; json_encode would refuse the whole request
         $base = self::baseUrl();
         $models = array_values(array_unique(array_filter([
             $opts['model'] ?? Setting::get('ai.model', 'meta-llama/llama-3.3-70b-instruct:free'),
