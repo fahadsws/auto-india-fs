@@ -119,6 +119,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware('permission:cars.manage')->group(function () {
             Route::get('car-models/data', [Admin\CarModelController::class, 'data'])->name('car-models.data');
             Route::post('car-models/import-url', [Admin\CarModelController::class, 'importUrl'])->name('car-models.import-url');
+            Route::post('car-models/{car_model}/fill-specs', [Admin\CarModelController::class, 'fillSpecs'])->name('car-models.fill-specs');
             Route::get('car-models/{car_model}/preview', [Admin\CarModelController::class, 'preview'])->name('car-models.preview');
             Route::post('car-models/bulk', [Admin\CarModelController::class, 'bulk'])->name('car-models.bulk');
             Route::resource('car-models', Admin\CarModelController::class)->except(['show']);

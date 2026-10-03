@@ -32,7 +32,7 @@
         <div class="col-md-4"><label class="form-label">Launch date</label><input type="date" class="form-control" name="launch_date" value="{{ old('launch_date', $car->launch_date?->format('Y-m-d')) }}"></div>
         <div class="col-12"><label class="form-label">Overview</label><textarea class="editor" name="overview" rows="10">{{ old('overview', $car->overview) }}</textarea></div>
         <div class="col-md-6"><label class="form-label">Highlights (one per line)</label><textarea class="form-control" name="highlights" rows="6">{{ old('highlights', implode("\n", $car->highlights ?? [])) }}</textarea></div>
-        <div class="col-md-6"><label class="form-label">Specs (<code>Label: value</code> per line)</label><textarea class="form-control" name="specs" rows="6" placeholder="Engine: 1.5L turbo petrol&#10;Power: 170 hp">{{ old('specs', $specsText) }}</textarea></div>
+        <div class="col-md-6"><label class="form-label d-flex justify-content-between align-items-center">Specs (<code>Label: value</code> per line)@if ($car->exists)<button type="submit" form="fillSpecsForm" class="btn btn-xs btn-label-primary" title="Fill missing specs from a link or the official spec sheet"><i class="ti ti-wand me-1"></i>Auto-fill specs</button>@endif</label><textarea class="form-control" name="specs" rows="6" placeholder="Engine: 1.5L turbo petrol&#10;Power: 170 hp">{{ old('specs', $specsText) }}</textarea></div>
         <div class="col-md-6"><label class="form-label">Meta title</label><input class="form-control" name="meta_title" maxlength="70" value="{{ old('meta_title', $car->meta_title) }}"></div>
         <div class="col-md-6"><label class="form-label">Meta description</label><input class="form-control" name="meta_description" maxlength="320" value="{{ old('meta_description', $car->meta_description) }}"></div>
       </div></div></div>
@@ -77,6 +77,13 @@
     </div>
   </div>
 </form>
+@if ($car->exists)
+<form method="POST" action="{{ route('admin.car-models.fill-specs', $car) }}" id="fillSpecsForm" class="card mt-4"><div class="card-body">@csrf
+  <h6 class="mb-1"><i class="ti ti-wand me-1 text-primary"></i>Auto-fill specs</h6>
+  <p class="text-muted small mb-2">Specs empty or thin? Paste a page that lists this model's specifications (optional) and we read its spec tables; any gaps are then filled from the official spec sheet. Existing values are never overwritten. Save your other changes first.</p>
+  <div class="row g-2"><div class="col-md-9"><input type="url" name="url" class="form-control" placeholder="https://… (optional spec page)"></div><div class="col-md-3"><button class="btn btn-primary w-100">Fill specs</button></div></div>
+</div></form>
+@endif
 @push('scripts')
 <script>
 // Body type choices depend on the vehicle type: changing the type clears the selection and rebuilds the list.
