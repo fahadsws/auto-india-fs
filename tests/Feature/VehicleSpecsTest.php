@@ -153,4 +153,16 @@ class VehicleSpecsTest extends TestCase
         $s = SpecFiller::normalize(["Eng\xFFine" => "163 \xE2cc"]);
         $this->assertSame('163 cc', reset($s));
     }
+
+    public function test_values_ending_in_multibyte_symbols_stay_valid_utf8_and_save(): void
+    {
+        $n = SpecFiller::normalize(['Price' => '₹ 1.2 lakh …', 'Range' => '– 312 km –', 'Note' => '• disc brakes ——']);
+        foreach ($n as $v) $this->assertTrue(mb_check_encoding($v, 'UTF-8'), $v);
+        $this->assertSame('₹ 1.2 lakh …', $n['Price']);
+        $this->assertSame('312 km', $n['Range']);
+
+        $brand = VehicleBrand::create(['name' => 'Hero', 'slug' => 'hero']);
+        $m = VehicleModel::create(['name' => 'X', 'slug' => 'hero-x', 'vehicle_type' => 'bike', 'brand_id' => $brand->id, 'status' => 'launched', 'specs' => ["Eng\xFFine" => "163 \xE2cc"]]);
+        $this->assertSame(['Engine' => '163 cc'], $m->fresh()->specs);
+    }
 }

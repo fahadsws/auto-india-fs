@@ -12,6 +12,11 @@ class VehicleModel extends Model
     use Indexable;
 
     protected $guarded = [];
+    /** Whatever reaches the JSON columns is made valid UTF-8 first, so one odd character can never break a save. */
+    public function setSpecsAttribute($value): void { $this->attributes['specs'] = $value === null ? null : json_encode(\App\Services\AiClient::utf8($value), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE); }
+    public function setHighlightsAttribute($value): void { $this->attributes['highlights'] = $value === null ? null : json_encode(\App\Services\AiClient::utf8($value), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE); }
+    public function setFaqAttribute($value): void { $this->attributes['faq'] = $value === null ? null : json_encode(\App\Services\AiClient::utf8($value), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE); }
+
     protected $casts = [
         'highlights' => 'array', 'specs' => 'array', 'faq' => 'array', 'gallery' => 'array', 'archive_gallery' => 'array',
         'image_hashes' => 'array', 'locked' => 'array', 'launch_date' => 'date', 'latest_event_at' => 'datetime', 'refreshed_at' => 'datetime',
