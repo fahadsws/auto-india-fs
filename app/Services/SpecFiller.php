@@ -112,12 +112,14 @@ class SpecFiller
 
     private static function label(string $s): string
     {
+        $s = AiClient::utf8($s);
         $s = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8')), " \t:-–—•*");
         return mb_strlen($s) > 1 ? Str::ucfirst($s) : '';
     }
 
     private static function value(string $s): string
     {
+        $s = AiClient::utf8($s);
         return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8')), " \t:-–—•*");
     }
 
