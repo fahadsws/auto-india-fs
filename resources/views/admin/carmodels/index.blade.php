@@ -8,12 +8,44 @@
 </div>
 <p class="text-muted mb-4">Pages are created and refreshed automatically when launch, facelift, price or spec news is published. Pin any field on the edit screen to stop automation changing it.</p>
 <div class="card mb-4"><div class="card-body">
-  <h5 class="mb-1"><i class="ti ti-link me-1 text-primary"></i>Add a model from a link</h5>
-  <p class="text-muted small mb-3">Paste a launch or product page. We read the specs, price and photos, write the model page in our own words, and open it here so you can check it and publish.</p>
-  <form method="POST" action="{{ route('admin.car-models.import-url') }}" class="row g-2 align-items-end" data-confirm="Read this page and build the model now? This can take up to a minute.">@csrf
-    <div class="col-12 col-lg-6"><label class="form-label small mb-1">Page URL</label><input type="url" name="url" value="{{ old('url') }}" class="form-control" placeholder="https://www.example.com/bikes/..." required></div>
-    <div class="col-6 col-lg-3"><label class="form-label small mb-1">Vehicle type</label><select name="vehicle_type" class="form-select">@foreach (config('vehicles') as $k => $vt)<option value="{{ $k }}" @selected(old('vehicle_type') === $k)>{{ $vt['label'] }}</option>@endforeach</select></div>
-    <div class="col-6 col-lg-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="draft" id="imp-draft" value="1" checked><label class="form-check-label small" for="imp-draft">Keep hidden</label></div></div>
+  <h5 class="mb-1"><i class="ti ti-link me-1 text-primary"></i>Add models from links</h5>
+  <p class="text-muted small mb-3">Paste one or many launch / product page links, <b>one per line</b>. We read the specs, price and photos, write each model page in our own words, and fill the spec list (from the page's spec tables, then from the official spec sheet if the page has few). Tick "same model" if the links are different pages about one vehicle.</p>
+  <form method="POST" action="{{ route('admin.car-models.import-url') }}" id="impForm" class="row g-2 align-items-end">@csrf
+    <div class="col-12 col-lg-6"><label class="form-label small mb-1">Page links (one per line, up to 30)</label><textarea name="urls" id="impUrls" rows="4" class="form-control" placeholder="https://www.example.com/bikes/model-one&#10;https://www.example.com/bikes/model-two" required>{{ old('urls', old('url')) }}</textarea></div>
+    <div class="col-6 col-lg-3"><label class="form-label small mb-1">Vehicle type</label><select name="vehicle_type" class="form-select">@foreach (config('vehicles') as $k => $vt)<option value="{{ $k }}" @selected(old('vehicle_type') === $k)>{{ $vt['label'] }}</option>@endforeach</select>
+      <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="draft" id="imp-draft" value="1" checked><label class="form-check-label small" for="imp-draft">Keep hidden</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="merge" id="imp-merge" value="1"><label class="form-check-label small" for="imp-merge">All links are the same model</label></div></div>
+    <div class="col-6 col-lg-3"><button class="btn btn-primary w-100" id="impGo"><i class="ti ti-download me-1"></i>Import</button></div>
+  </form>
+  <div id="impLog" class="mt-3 small" hidden></div>
+</div></div>
+<script>
+(() => {
+  const f = document.getElementById('impForm'); if (!f) return;
+  const log = document.getElementById('impLog'), btn = document.getElementById('impGo');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  f.addEventListener('submit', async e => {
+    const links = [...new Set(f.urls.value.split(/[\s,]+/).filter(u => /^https?:\/\//i.test(u)))];
+    if (links.length < 1) return;                                  // let the server explain
+    const merge = f.merge.checked;
+    if (links.length === 1 || merge) return;                       // a single page: normal submit, opens the new model
+    e.preventDefault(); btn.disabled = true; log.hidden = false; log.innerHTML = '';
+    let ok = 0;
+    for (const [i, u] of links.entries()) {                        // one link per request: no timeouts, live progress
+      const row = document.createElement('div'); row.className = 'py-1'; row.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + (i + 1) + '/' + links.length + ' · ' + esc(u); log.appendChild(row);
+      try {
+        const body = new FormData(); body.append('_token', f._token.value); body.append('url', u); body.append('vehicle_type', f.vehicle_type.value); if (f.draft.checked) body.append('draft', '1');
+        const r = await fetch(f.action, { method: 'POST', body, headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        let d = {}; try { d = await r.json(); } catch (er) {}
+        if (r.ok && d.ok) { ok++; row.innerHTML = '<span class="text-success">✔</span> <a href="' + d.edit_url + '" target="_blank">' + esc(d.name) + '</a> · ' + d.specs + ' specs'; }
+        else row.innerHTML = '<span class="text-danger">✖</span> ' + esc(u) + ' — ' + esc(d.message || ('Failed (' + r.status + ')'));
+      } catch (er) { row.innerHTML = '<span class="text-danger">✖</span> ' + esc(u) + ' — connection problem'; }
+    }
+    btn.disabled = false;
+    const done = document.createElement('div'); done.className = 'mt-2 fw-semibold'; done.innerHTML = ok + ' of ' + links.length + ' imported. <a href="">Refresh the list</a>'; log.appendChild(done);
+  });
+})();
+</script>
     <div class="col-12 col-lg-1"><button class="btn btn-primary w-100">Import</button></div>
   </form>
 </div></div>

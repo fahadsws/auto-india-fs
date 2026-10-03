@@ -58,3 +58,10 @@
 - New granular permissions: `comparisons.manage`, `car_masters.manage`, `home.manage`, `menus.manage`, `data.reset`; `assistant.manage` is now also in the role editor. Routes and sidebar use them.
 - Migration `2026_10_03_000002_add_missing_admin_permissions`: existing roles keep their access (holders of `cars.manage` get comparisons + car masters, holders of `settings.manage` get home settings + menus). `data.reset` is granted to nobody.
 - A test fails if a permission is used in the sidebar/routes but is missing from the role editor.
+
+# Vehicle import: complete specs + many links
+
+- **Why specs came empty:** the page reader keeps only article paragraphs, so spec tables / lists were dropped before the AI saw them, and the AI often returned `{}` or "N/A". Now `SpecFiller::extract` reads tables, definition lists, "Label: value" lines and JSON-LD straight from the page HTML and feeds them to the AI; the page's own values win. `SpecFiller::normalize` flattens nested/blank AI output into clean `Label: value` pairs.
+- **Always filled:** if a model still has fewer than 8 specs after import, it is topped up from the page text, then from the official spec sheet (only specs the AI is certain about; existing values and pinned/locked specs are never touched). The same top-up runs for news-created launched models.
+- **Fix existing models:** the model edit page has **Auto-fill specs** (optional spec-page link), and `php artisan vehicles:fill-specs [--all] [--limit=25]` backfills empty (or thin with `--all`) models.
+- **Many links:** Vehicle catalog -> *Add models from links*: paste up to 30 links (one per line). Each becomes its own model, imported one request at a time with a live progress list (no timeouts). Tick **All links are the same model** to combine up to 5 pages (facts, specs, photos) into one richer model page.

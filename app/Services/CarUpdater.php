@@ -71,7 +71,7 @@ class CarUpdater
             $set('price_max', ! empty($car['price_max_lakh']) ? (int) round((float) $car['price_max_lakh'] * 100000) : null);
         }
         if (! empty($car['launch_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $car['launch_date']) && ($event === 'launch' || $isNew || ! $model->launch_date)) $set('launch_date', $car['launch_date']);
-        if (! empty($car['specs']) && is_array($car['specs']) && ! $model->isLocked('specs')) $model->specs = array_merge($model->specs ?? [], array_slice(array_map('strval', $car['specs']), 0, 24, true));
+        if (! empty($car['specs']) && is_array($car['specs']) && ! $model->isLocked('specs')) $model->specs = SpecFiller::merge(SpecFiller::normalize($car['specs']), SpecFiller::normalize($model->specs ?? [])) ?: null;
 
         if (! $model->isLocked('status')) {
             $model->status = match (true) {
@@ -93,6 +93,10 @@ class CarUpdater
 
         if ($model->needs_refresh) {
             try { self::refreshContent($model); } catch (\Throwable) {}
+        }
+        // A launched car with a thin spec sheet gets it topped up (page text is not available here, so from the official spec sheet).
+        if ($model->status !== 'upcoming' && count($model->specs ?? []) < SpecFiller::ENOUGH) {
+            try { SpecFiller::fill($model); } catch (\Throwable) {}
         }
         return $model->fresh();
     }

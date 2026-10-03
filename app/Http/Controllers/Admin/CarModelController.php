@@ -57,11 +57,69 @@ class CarModelController extends Controller
     /** Build a model page from a product / launch link (text is rewritten, the link itself is never stored). */
     public function importUrl(Request $r)
     {
-        $d = $r->validate(['url' => 'required|url|max:700', 'vehicle_type' => 'required|in:'.implode(',', array_keys(config('vehicles')))]);
+        $d = $r->validate([
+            'url' => 'nullable|string|max:700',
+            'urls' => 'nullable|string|max:8000',       // several links, one per line
+            'merge' => 'nullable|boolean',              // all links are the SAME model: combine them into one richer page
+            'vehicle_type' => 'required|in:'.implode(',', array_keys(config('vehicles'))),
+        ]);
+        $links = collect(preg_split('/[\s,]+/', trim(($d['urls'] ?? '')."\n".($d['url'] ?? '')), -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn ($u) => trim($u))->filter(fn ($u) => filter_var($u, FILTER_VALIDATE_URL) && preg_match('#^https?://#i', $u))->unique()->values();
+        if ($links->isEmpty()) return $this->importReply($r, false, 'Paste at least one valid link (starting with http:// or https://).');
+        if ($links->count() > 30) return $this->importReply($r, false, 'Please import at most 30 links at a time.');
+
         @set_time_limit(280);
-        $res = (new \App\Services\VehicleImporter())->importUrl($d['url'], $d['vehicle_type'], ! $r->boolean('draft'));
-        if (! $res instanceof VehicleModel) return back()->withInput()->with('error', $res);
-        return redirect()->route('admin.car-models.edit', $res)->with('success', 'Model added'.($res->is_published ? '' : ' as hidden').'. Review the details below, then save.');
+        $importer = new \App\Services\VehicleImporter();
+        $publish = ! $r->boolean('draft');
+
+        // One model from one or several links.
+        if ($links->count() === 1 || $r->boolean('merge')) {
+            $res = $importer->importUrl($links->take(5)->all(), $d['vehicle_type'], $publish);
+            if (! $res instanceof VehicleModel) return $this->importReply($r, false, $res);
+            return $this->importReply($r, true, 'Model added'.($res->is_published ? '' : ' as hidden').'. Review the details below, then save.', $res);
+        }
+
+        // Several links = several models, processed one after another (the admin page sends them one per request to show progress).
+        $made = []; $failed = []; $deadline = microtime(true) + 240;
+        foreach ($links as $u) {
+            if (microtime(true) > $deadline) { $failed[] = "$u — skipped (time limit; import it again)"; continue; }
+            $res = $importer->importUrl($u, $d['vehicle_type'], $publish);
+            $res instanceof VehicleModel ? $made[] = $res : $failed[] = "$u — $res";
+        }
+        $msg = count($made).' of '.$links->count().' models added'.($publish ? '' : ' as hidden').'.'.($failed ? ' Not imported: '.implode(' | ', $failed) : '');
+        if (count($made) === 1 && ! $failed) return redirect()->route('admin.car-models.edit', $made[0])->with('success', $msg);
+        return redirect()->route('admin.car-models.index')->with($made ? 'success' : 'error', $msg);
+    }
+
+    /** JSON for the page's progress loop, a normal redirect otherwise. */
+    private function importReply(Request $r, bool $ok, string $message, ?VehicleModel $m = null)
+    {
+        if ($r->expectsJson()) {
+            return response()->json(['ok' => $ok, 'message' => $message] + ($m ? ['name' => $m->full_name, 'specs' => count($m->specs ?? []), 'edit_url' => route('admin.car-models.edit', $m)] : []), $ok ? 200 : 422);
+        }
+        if (! $ok) return back()->withInput()->with('error', $message);
+        return redirect()->route('admin.car-models.edit', $m)->with('success', $message);
+    }
+
+    /** Fill empty / thin specs: reads them from a link if one is given, otherwise from the official spec sheet. */
+    public function fillSpecs(Request $r, VehicleModel $car_model)
+    {
+        $r->validate(['url' => 'nullable|url|max:700']);
+        if ($car_model->isLocked('specs')) return back()->with('error', 'Specs are pinned (locked) for this model. Unpin them first.');
+        if (! AiClient::configured()) return back()->with('error', 'AI provider is not configured (Settings → AI).');
+        @set_time_limit(200);
+        $start = count($car_model->specs ?? []);
+        $text = '';
+        if ($r->filled('url')) {
+            $page = \App\Services\PageFetcher::article($r->input('url'));
+            if (! $page) return back()->with('error', 'Could not open that page.');
+            $car_model->specs = \App\Services\SpecFiller::merge(\App\Services\SpecFiller::normalize($car_model->specs ?? []), $page['specs'] ?? []) ?: null;
+            $car_model->save();
+            $text = $page['text'];
+        }
+        \App\Services\SpecFiller::fill($car_model, $text, true);
+        $added = count($car_model->specs ?? []) - $start;
+        return redirect()->route('admin.car-models.edit', $car_model)->with($added > 0 ? 'success' : 'error', $added > 0 ? "Added $added spec(s). Please check them before publishing." : 'No new specs could be found for this model.');
     }
 
     public function preview(VehicleModel $car_model)

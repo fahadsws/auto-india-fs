@@ -110,6 +110,6 @@ class PageFetcher
         $r = Fetcher::get($url);
         if (! $r['ok']) return null;
         $a = ArticleExtractor::extract($r['body'], $r['url']);
-        return $a + ['image' => $a['images'][0] ?? null, 'url' => $r['url'], 'status' => $r['status']];
+        return $a + ['image' => $a['images'][0] ?? null, 'url' => $r['url'], 'status' => $r['status'], 'specs' => SpecFiller::extract($r['body'])];
     }
 }
