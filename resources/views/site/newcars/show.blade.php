@@ -23,10 +23,7 @@
 @endpush
 
 @section('content')
-<div class="phead"><div class="w">
-  <span class="tag">{{ $car->status_label }}@if($car->latest_event_at) · updated {{ $car->latest_event_at->diffForHumans() }}@endif</span>
-  <h1 class="h" style="margin-top:12px">{{ $car->full_name }}</h1><p>{{ $car->tagline ?: $car->price_label }}</p>
-</div></div>
+@include('site.partials.crumb', ['title' => $car->full_name, 'trail' => [['New cars', route('newcars.index')]], 'tag' => $car->status_label.($car->latest_event_at ? ' · updated '.$car->latest_event_at->diffForHumans() : '')])
 
 <div class="w"><div class="car-wrap">
   <div>

@@ -8,11 +8,7 @@
 @section('image', $a->hero_url)
 
 @section('content')
-<div class="phead"><div class="w">
-  <span class="tag">Car comparison</span>
-  <h1 class="h" style="margin-top:12px">{{ $heading }}</h1>
-  @if ($meta?->intro)<p>{{ $meta->intro }}</p>@endif
-</div></div>
+@include('site.partials.crumb', ['title' => $heading, 'trail' => [['Compare cars', route('compare.index')]]])
 
 <div class="w">
   <div class="cmp-heads">

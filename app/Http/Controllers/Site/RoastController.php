@@ -36,14 +36,14 @@ class RoastController extends Controller
             'habits' => 'nullable|array|max:3',
             'habits.*' => 'in:'.implode(',', array_keys(Roast::HABITS)),
             'name' => 'nullable|string|max:40',
-        ], ['car.required' => 'Pehle gaadi ka naam batao.']);
+        ], ['car.required' => 'Please enter your car.']);
 
         $car = Roast::clean($d['car'], 60);
         $name = Roast::clean((string) ($d['name'] ?? ''), 24);
         $plate = Roast::plate((string) ($d['plate'] ?? ''));
         if (Roast::isUnsafe($plate)) $plate = '';   // a rude "plate" is simply left off the card
         if (mb_strlen($car) < 2 || Roast::isUnsafe($car.' '.$name)) {
-            return response()->json(['message' => 'Gaadi ya naam theek se likho - sirf naam, koi gaali ya baat nahi.', 'errors' => ['car' => ['Gaadi ka sahi naam likho.']]], 422);
+            return response()->json(['message' => 'Please enter a valid car and name - plain text only.', 'errors' => ['car' => ['Please enter a valid car name.']]], 422);
         }
 
         // Daily cap per verified visitor, so one person cannot burn the AI budget.
@@ -52,7 +52,7 @@ class RoastController extends Controller
         $limit = max(1, (int) Setting::get('roast.limit_day', 10));
         Cache::add($key, 0, now()->addDay());
         if (Cache::increment($key) > $limit) {
-            return response()->json(['message' => 'Aaj ke roast khatam! Kal wapas aana, gaadi kahin nahi ja rahi. 😄', 'reason' => 'daily'], 429);
+            return response()->json(['message' => 'You have reached today\'s roast limit. Please come back tomorrow.', 'reason' => 'daily'], 429);
         }
 
         // Over the site-wide AI budget: still answer, from the hand-written lines.
@@ -61,7 +61,9 @@ class RoastController extends Controller
 
         $u = \App\Services\AiClient::lastUsage();
         if ($card['ai']) AssistantGuard::spend($u['in'] + $u['out'], (string) $r->ip());
+        // A roast counts as one free interaction until the visitor has shared their details (see EnsureAssistantSession).
+        if ($s && ! $r->attributes->get('assistant_verified')) $s->increment('messages_total');
 
-        return response()->json(['ok' => true, 'card' => $card + ['car' => $car, 'name' => $name, 'plate' => $plate], 'left' => max(0, $limit - (int) Cache::get($key, 0))]);
+        return response()->json(['ok' => true, 'card' => $card + ['car' => $car, 'name' => $name, 'plate' => $plate], 'left' => max(0, $limit - (int) Cache::get($key, 0)), 'token' => $s?->token]);
     }
 }

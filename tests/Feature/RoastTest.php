@@ -33,9 +33,12 @@ class RoastTest extends TestCase
         $this->get('/sitemap.xml')->assertSee('/roast-my-car');
     }
 
-    public function test_unverified_visitor_gets_the_gate_not_a_roast(): void
+    public function test_free_roasts_then_the_gate(): void
     {
-        $this->postJson('/roast-my-car/roast', $this->body())->assertStatus(401)->assertJson(['gate' => true]);
+        Setting::put('assistant.free_messages', '1');
+        $first = $this->postJson('/roast-my-car/roast', $this->body())->assertOk();
+        $anon = ['X-Assistant-Token' => $first->json('token')];
+        $this->postJson('/roast-my-car/roast', $this->body(), $anon)->assertStatus(401)->assertJson(['gate' => true]);
     }
 
     public function test_verified_visitor_gets_a_card_without_ai(): void

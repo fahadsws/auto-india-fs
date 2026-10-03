@@ -3,7 +3,7 @@
 @section('description', 'Watch the latest car reviews, launches and comparisons — streamed from YouTube.')
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">Videos</h1><p>Reviews, launches and drives. Played here, hosted on YouTube.</p></div></div>
+@include('site.partials.crumb', ['title' => 'Videos', 'trail' => []])
 @php($hasAd = \App\Models\HomeSetting::current()->adsFor('vertical', 'videos')->isNotEmpty())
 <div class="w {{ $hasAd ? 'ad-layout' : '' }}" style="padding-top:34px">
   <div>

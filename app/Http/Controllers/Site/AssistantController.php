@@ -16,7 +16,8 @@ class AssistantController extends Controller
     public function chat(Request $r, Assistant $assistant)
     {
         $d = $r->validate([
-            'message' => 'required|string|max:1000',
+            'message' => 'required_without:intent|nullable|string|max:1000',
+            'intent' => 'nullable|in:new,used,sell',
             'history' => 'nullable|array|max:6',
             'history.*.role' => 'in:user,assistant',
             'history.*.content' => 'string|max:1200',
@@ -24,8 +25,17 @@ class AssistantController extends Controller
         ]);
         $s = $r->attributes->get('assistant_session');
 
+        // The New / Used / Sell tabs are answered without the AI and do not use up a free message.
+        if (! empty($d['intent'])) {
+            try {
+                return response()->json($assistant->choose($d['intent'], $s) + ['token' => $s->token]);
+            } catch (\Throwable $e) {
+                return $this->failed($e, 'tab');
+            }
+        }
+
         $lock = AssistantGuard::lock($s); // one in-flight request per visitor
-        if (! $lock) return response()->json(['message' => 'Still working on your last question…', 'reason' => 'busy'], 429);
+        if (! $lock) return response()->json(['message' => 'Still working on your previous question. One moment, please.', 'reason' => 'busy'], 429);
 
         try {
             $s->refresh();
@@ -33,10 +43,23 @@ class AssistantController extends Controller
             if (! $verdict['allow']) {
                 return response()->json(['message' => $verdict['message'], 'reason' => $verdict['reason'], 'retry_after' => $verdict['retry_after']], 429);
             }
-            return response()->json($assistant->reply($d['message'], $d['history'] ?? [], $s, (string) $r->ip(), (bool) ($d['voice'] ?? false), $verdict['degraded']));
+            return response()->json($assistant->reply($d['message'], $d['history'] ?? [], $s, (string) $r->ip(), (bool) ($d['voice'] ?? false), $verdict['degraded']) + ['token' => $s->token]);
+        } catch (\Throwable $e) {
+            return $this->failed($e, 'chat');
         } finally {
             $lock->release();
         }
+    }
+
+    /** Never show a raw exception to a visitor: log it for the admin and answer with a calm, useful message. */
+    private function failed(\Throwable $e, string $where)
+    {
+        \Illuminate\Support\Facades\Log::error("Assistant $where failed: ".$e->getMessage(), ['exception' => $e]);
+        $phone = trim((string) Setting::get('site.phone', ''));
+        return response()->json([
+            'message' => 'I could not complete that request just now. Please try again in a moment'.($phone !== '' ? ", or call our team on $phone." : '.'),
+            'reason' => 'error',
+        ], 503);
     }
 
     /**

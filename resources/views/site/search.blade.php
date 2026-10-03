@@ -2,8 +2,9 @@
 @section('title', ($q ? 'Search: '.$q : 'Search').' | '.\App\Models\Setting::get('site.name'))
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">Search</h1>
-  <form action="{{ route('search') }}" style="display:flex;gap:10px;max-width:560px;margin-top:16px"><input name="q" value="{{ $q }}" placeholder="Search cars, news, videos…" autofocus style="flex:1;min-width:0;height:54px;border:0;border-radius:8px;padding:0 18px;background:#fff"><button class="go">Search</button></form></div></div>
+@include('site.partials.crumb', ['title' => 'Search'])
+<div class="w" style="padding-top:18px">
+  <form action="{{ route('search') }}" style="display:flex;gap:10px;max-width:560px;"><input name="q" value="{{ $q }}" placeholder="Search cars, news, videos…" autofocus style="flex:1;min-width:0;height:54px;border:1px solid var(--line);border-radius:8px;padding:0 18px;background:#fff"><button class="go">Search</button></form></div>
 <div class="w" style="padding-top:28px">
   @if ($q && $articles->isEmpty() && $listings->isEmpty() && $videos->isEmpty() && $vehicleModels->isEmpty())
     <div class="empty"><h3>Nothing found for “{{ $q }}”</h3><p>Ask our AI instead — it can find things even if the words don't match exactly.</p><button class="go" data-ask="{{ $q }}"><i class="ti ti-sparkles"></i> Ask AI</button></div>

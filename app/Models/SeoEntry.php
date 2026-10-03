@@ -22,6 +22,8 @@ class SeoEntry extends Model
         'costperkm' => ['Cost per km calculator', 'costperkm'],
         'mechanic' => ['Online mechanic', 'mechanic'],
         'roast' => ['Roast my car', 'roast'],
+        'echallan' => ['E-challan check', 'echallan'],
+        'evstations' => ['EV charging stations', 'evstations'],
         'sell' => ['Sell your car', 'sell'],
         'about' => ['About us', 'about'],
         'contact' => ['Contact us', 'contact'],

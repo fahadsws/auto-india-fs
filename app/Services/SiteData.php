@@ -55,8 +55,15 @@ class SiteData
         if (preg_match('/\b(automatic|auto|amt|cvt|dct|dsg)\b/', $t)) $f['transmission'] = 'auto';
         elseif (preg_match('/\bmanual\b/', $t)) $f['transmission'] = 'manual';
 
-        if (preg_match('/\b(used|second[- ]?hand|pre[- ]?owned|certified|purani|puraani|purana|puraana)\b/', $t)) $f['type'] = 'used';
-        elseif (preg_match('/\b(new cars?|brand new|new models?|upcoming|launch(?:es|ed)?|new bikes?|new trucks?|nayi gaa?d(?:i|iyan)|nai gaa?d(?:i|iyan)|naya gaa?di)\b/', $t)) $f['type'] = 'new';
+        // new vs used: a bare "new" counts (it is the natural answer to "new or used?"); "New Delhi" is a city, not a type.
+        $tt = preg_replace('/\bnew\s+(delhi|town|panvel|friends colony)\b/', ' ', $t);
+        $usedWord = (bool) preg_match('/\b(used|second[- ]?hand|pre[- ]?owned|certified|purani|puraani|purana|puraana|puraane)\b/', $tt);
+        $newWord = (bool) preg_match('/\b(new|brand new|nayi|nai|naya|naye|nayee|upcoming|launch(?:es|ed)?)\b/', $tt);
+        $notUsed = (bool) preg_match('/\b(not|no|nahi|nhi|instead of|rather than)\b\s+(?:a\s+|any\s+)?(?:used|second[- ]?hand|pre[- ]?owned|purani|purana)/', $tt);
+        $notNew = (bool) preg_match('/\b(not|no|nahi|nhi|instead of|rather than)\b\s+(?:a\s+|any\s+)?(?:new|brand new|nayi|naya)\b/', $tt);
+        if ($usedWord && $newWord) { $f['type'] = $notUsed ? 'new' : ($notNew ? 'used' : null); if ($f['type'] === null) unset($f['type']); }
+        elseif ($usedWord) $f['type'] = 'used';
+        elseif ($newWord) $f['type'] = 'new';
 
         if (preg_match('/\b(bikes?|motorcycles?|scooters?|two[- ]?wheelers?)\b/', $t)) $f['vehicle'] = 'bike';
         elseif (preg_match('/\btrucks?\b/', $t)) $f['vehicle'] = 'truck';

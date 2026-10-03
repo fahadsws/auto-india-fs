@@ -39,7 +39,11 @@ Route::get('/cost-per-km-calculator', [Site\CalculatorController::class, 'costPe
 Route::get('/roast-my-car', [Site\RoastController::class, 'page'])->name('roast');
 Route::post('/roast-my-car/roast', [Site\RoastController::class, 'roast'])->middleware(['throttle:roast', 'assistant.session'])->name('roast.run');
 Route::get('/online-mechanic', [Site\MechanicController::class, 'page'])->name('mechanic');
-Route::post('/online-mechanic/chat', [Site\MechanicController::class, 'chat'])->middleware(['throttle:mechanic', 'assistant.session'])->name('mechanic.chat');
+Route::post('/online-mechanic/chat', [Site\MechanicController::class, 'chat'])->middleware(['throttle:mechanic', 'assistant.session:mechanic'])->name('mechanic.chat');
+Route::get('/e-challan', [Site\EChallanController::class, 'page'])->name('echallan');
+Route::get('/ev-charging-stations', [Site\EvStationController::class, 'page'])->name('evstations');
+Route::get('/ev-charging-stations/geocode', [Site\EvStationController::class, 'geocode'])->middleware('throttle:30,1')->name('evstations.geocode');
+Route::get('/ev-charging-stations/search', [Site\EvStationController::class, 'search'])->middleware('throttle:20,1')->name('evstations.search');
 Route::get('/sell-your-car', [Site\PageController::class, 'sell'])->name('sell');
 Route::post('/sell-your-car', [Site\PageController::class, 'sellSubmit'])->middleware('throttle:6,1')->name('sell.submit');
 Route::get('/sitemap.xml', [Site\PageController::class, 'sitemap'])->name('sitemap');

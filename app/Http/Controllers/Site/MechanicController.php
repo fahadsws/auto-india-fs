@@ -9,7 +9,7 @@ use App\Services\AssistantGuard;
 use App\Services\Mechanic;
 use Illuminate\Http\Request;
 
-/** "Online mechanic": AI chat that diagnoses a car problem and gives a fair, city-aware cost. Same one-time lead + OTP gate as the assistant. */
+/** "Online mechanic": AI chat that diagnoses a car problem and gives a fair, city-aware cost. A few free messages, then the same one-time lead + OTP step as the assistant. */
 class MechanicController extends Controller
 {
     public function page()
@@ -36,8 +36,8 @@ class MechanicController extends Controller
         ]);
 
         $message = Mechanic::clean($d['message'], 500);
-        if ($message === '') return response()->json(['message' => 'Apni problem likh kar bhejo.'], 422);
-        if (Mechanic::isUnsafe($message)) return response()->json(['message' => 'Gaadi ki problem batao - gaali ya bekaar baat se main madad nahi kar paunga.'], 422);
+        if ($message === '') return response()->json(['message' => 'Please describe the problem with your car.'], 422);
+        if (Mechanic::isUnsafe($message)) return response()->json(['message' => 'Please describe the car problem in plain words. I am unable to respond to abusive or unrelated messages.'], 422);
 
         $profile = [];
         foreach (['car' => 80, 'age' => 30, 'km' => 30, 'city' => 60] as $k => $n) $profile[$k] = Mechanic::clean((string) data_get($d, "profile.$k", ''), $n);
@@ -46,7 +46,7 @@ class MechanicController extends Controller
 
         $s = $r->attributes->get('assistant_session');
         $lock = AssistantGuard::lock($s);   // one in-flight request per visitor
-        if (! $lock) return response()->json(['message' => 'Mechanic bhai abhi pichhla sawaal dekh rahe hain…', 'reason' => 'busy'], 429);
+        if (! $lock) return response()->json(['message' => 'Still working on your previous question. One moment, please.', 'reason' => 'busy'], 429);
 
         try {
             $s->refresh();
@@ -64,10 +64,13 @@ class MechanicController extends Controller
             $s->refresh();
 
             if (! $res['ok']) {
-                $msg = $res['error'] === 'off' ? Mechanic::SAFE_NOTE : 'Mechanic bhai ko abhi jawab banane mein dikkat aa rahi hai. Ek baar dobara bhejo.';
+                $msg = $res['error'] === 'off' ? Mechanic::SAFE_NOTE : Mechanic::RETRY_NOTE;
                 return response()->json(['ok' => true, 'degraded' => true, 'reply' => $msg, 'quick_replies' => [], 'facts' => [], 'stage' => 'asking', 'diagnosis' => null, 'left' => $this->left($s)]);
             }
-            return response()->json(['ok' => true] + $res['data'] + ['left' => $this->left($s)]);
+            return response()->json(['ok' => true] + $res['data'] + ['left' => $this->left($s), 'token' => $s->token]);
+        } catch (\Throwable $e) {   // never show a raw exception to the owner
+            \Illuminate\Support\Facades\Log::error('Mechanic chat failed: '.$e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'The mechanic could not respond just now. Please try again in a moment.', 'reason' => 'error'], 503);
         } finally {
             $lock->release();
         }

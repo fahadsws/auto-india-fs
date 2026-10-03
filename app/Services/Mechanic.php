@@ -17,12 +17,13 @@ class Mechanic
     public const ZONES = ['engine', 'brakes', 'tyres', 'suspension', 'ac', 'battery', 'gearbox', 'exhaust'];
     private const MAX_COST = 1000000;   // nothing on a normal car repair estimate is above ₹10 lakh
 
-    public const SAFE_NOTE = "Abhi mera AI mechanic available nahi hai. Tab tak ye safe checks karo: warning light/smoke/jalne ki smell ho ya brake-steering mein dikkat ho to gaadi mat chalao aur tow karwao; warna engine oil, coolant, tyre pressure aur battery terminal dekh lo. Kuch der baad dobara try karo ya apne nazdeeki service center se baat karo.";
+    public const SAFE_NOTE = "Our AI mechanic is not available right now. In the meantime, please do not drive the car if you see a warning light, smoke or a burning smell, or if the brakes or steering feel wrong - arrange a tow instead. Otherwise check the engine oil, coolant level, tyre pressure and battery terminals. Please try again in a little while, or speak to your nearest authorised service centre.";
+    public const RETRY_NOTE = "I could not put that answer together just now. Please send your message once more.";
 
     public static function system(): string
     {
         return <<<'P'
-You are "Mechanic Bhai", an experienced, honest Indian car mechanic chatting with a car owner on a car website. Reply in the SAME language and script the owner writes in (English, Hindi or Hinglish in Roman script; default Hinglish). Warm, simple words, short sentences, no jargon without a one-line explanation.
+You are "Auto Mechanic", an experienced, honest and professional car service advisor on an Indian car website, chatting with a car owner. LANGUAGE: reply in clear, professional English by default. If the owner writes in another language or script (Hindi, Hinglish in Roman letters, Marathi, Tamil, etc.), reply in that same language and script and keep it up until they switch. TONE: courteous, calm and precise; plain words, short sentences, no slang or casual filler (no "bhai", "boss", "yaar"), no jokes, no emojis; explain any technical term in a few words.
 
 JOB: understand the problem by asking smart questions, then explain WHY it happens, HOW to stop it getting worse, WHAT work is needed and a FAIR COST so the owner does not overpay.
 
@@ -30,7 +31,7 @@ HOW TO CHAT
 - Ask at most 1-2 short questions per turn and at most 5 questions in total. Diagnose as soon as you are reasonably confident; do not interrogate.
 - Ask only what matters for THIS symptom. Useful things: car model/age, km run, fuel type, city, when exactly it happens (cold start, braking, turning, AC on, speed, rain), sounds/smells/warning lights, RECENT WORK (tyres changed? when, which brand? battery, service, alignment, fuel brand), the usual ROUTES and ROAD TYPE (city traffic, highway, ghat, potholes, waterlogging, dust, off-road), WEATHER (monsoon, heat, cold), load/driving style, parked outside or in a basement.
 - Connect the dots like a real mechanic (e.g. tyres changed 6 months ago + pulling to one side => alignment/balancing or uneven pressure; monsoon + AC smell => cabin filter/evaporator; short city trips + weak start => battery not charging fully).
-- Offer 2-4 tap-able quick_replies that fit your question (short, in the owner's language).
+- Offer 2-4 tap-able quick_replies that fit your question (short, in the language the owner is using).
 
 SAFETY (never break)
 - Brake problems, steering problems, overheating, burning/fuel smell, smoke, oil pressure/airbag/ABS light with symptoms, flooding/water in engine, suspected accident damage => severity "stop": tell them clearly not to drive and to arrange a tow.
@@ -42,7 +43,7 @@ SAFETY (never break)
 COST RULES
 - All money in Indian rupees as whole numbers. Give min-max RANGES split into parts and labour for each work item, for the owner's CITY (metro labour and branded parts cost more than tier-2/3 and local/aftermarket parts). Say in city_note how the price changes by city and genuine vs good-aftermarket parts. If you are not sure, widen the range - never invent precision. Do not add GST lines; say prices are approximate.
 
-OUTPUT: ONLY one JSON object, no markdown:
+OUTPUT: ONLY one JSON object, no markdown and no text before or after it. Keep every string short so the whole object stays compact (diagnosis: at most 4 causes, 5 fix lines, 3 items in each list):
 {"reply":"your chat message (1-4 short sentences; when diagnosing, a 2-sentence summary pointing to the card)",
  "quick_replies":["..",".."],
  "facts":{"car":"","age":"","km":"","fuel":"","city":"","symptom":"","recent_work":"","route":"","weather":""},   // only what you actually know, "" otherwise
@@ -115,7 +116,7 @@ P;
         $diag = is_array($d['diagnosis'] ?? null) ? self::diagnosis($d['diagnosis']) : null;
         $stage = ($d['stage'] ?? '') === 'diagnosis' && $diag ? 'diagnosis' : 'asking';
         if ($reply === '' && ! $diag) return null;
-        if ($reply === '') $reply = 'Ye raha meri taraf se pura estimate. Neeche card dekho.';
+        if ($reply === '') $reply = 'Here is my full assessment. Please see the report below.';
 
         $facts = [];
         foreach (['car', 'age', 'km', 'fuel', 'city', 'symptom', 'recent_work', 'route', 'weather'] as $k) {
@@ -124,7 +125,7 @@ P;
         }
         return [
             'reply' => $reply,
-            'quick_replies' => $stage === 'diagnosis' ? ['Naya sawaal poochna hai', 'Nayi problem'] : self::list($d['quick_replies'] ?? [], 4, 40),
+            'quick_replies' => $stage === 'diagnosis' ? ['Ask another question', 'New problem'] : self::list($d['quick_replies'] ?? [], 4, 40),
             'facts' => $facts,
             'zones' => array_slice(array_values(array_unique(array_filter((array) ($d['zones'] ?? []), fn ($z) => is_string($z) && in_array($z, self::ZONES, true)))), 0, 3),
             'stage' => $stage,
@@ -160,7 +161,7 @@ P;
             // totals are always recomputed from the line items - the model's own sums are never trusted
             'total_min' => array_sum(array_map(fn ($f) => $f['parts_min'] + $f['labour_min'], $fix)),
             'total_max' => array_sum(array_map(fn ($f) => $f['parts_max'] + $f['labour_max'], $fix)),
-            'disclaimer' => 'Ye AI ka andaza hai, final kharcha gaadi dekhne ke baad hi pata chalta hai. 2 garage se estimate lekar compare karo.',
+            'disclaimer' => 'This is an AI-generated estimate. The final cost is confirmed only after a physical inspection. Please compare quotes from at least two garages.',
         ];
         if (self::isUnsafe(json_encode($out, JSON_UNESCAPED_UNICODE))) return null;
         return $out;
@@ -172,15 +173,51 @@ P;
         return Roast::isUnsafe($text);
     }
 
-    /** Lenient JSON decode (models wrap JSON in prose or ``` fences and leave trailing commas). */
+    /** Lenient JSON decode: models wrap JSON in prose or ``` fences, leave trailing commas, or get cut off mid-object. */
     public static function decode(string $text): ?array
     {
         $text = preg_replace('/^```(?:json)?|```$/m', '', $text);
-        $a = strpos($text, '{'); $b = strrpos($text, '}');
-        if ($a === false || $b === false) return null;
-        $raw = substr($text, $a, $b - $a + 1);
+        $a = strpos($text, '{');
+        if ($a === false) return null;
+        $b = strrpos($text, '}');
+        $raw = $b !== false && $b > $a ? substr($text, $a, $b - $a + 1) : substr($text, $a);
         $d = json_decode($raw, true) ?? json_decode(preg_replace('/,\s*([}\]])/', '$1', $raw), true);
+        if (! is_array($d)) $d = json_decode(self::repair(substr($text, $a)), true);
         return is_array($d) ? $d : null;
+    }
+
+    /** Close a JSON object that was cut off (token limit): drop the unfinished tail, close strings, arrays and objects. */
+    public static function repair(string $raw): string
+    {
+        $out = ''; $stack = []; $inStr = false; $esc = false;
+        $n = strlen($raw);
+        for ($i = 0; $i < $n; $i++) {
+            $c = $raw[$i]; $out .= $c;
+            if ($inStr) { if ($esc) $esc = false; elseif ($c === '\\') $esc = true; elseif ($c === '"') $inStr = false; continue; }
+            if ($c === '"') $inStr = true;
+            elseif ($c === '{' || $c === '[') $stack[] = $c === '{' ? '}' : ']';
+            elseif (($c === '}' || $c === ']') && $stack) array_pop($stack);
+        }
+        if ($inStr) $out .= '"';
+        $out = preg_replace('/,\s*$/', '', $out);
+        $out = preg_replace('/,\s*"[^"]*"\s*:\s*$/', '', $out);       // a key with no value yet
+        $out = preg_replace('/"[^"]*"\s*:\s*$/', 'null', $out);
+        return $out.implode('', array_reverse($stack));
+    }
+
+    /** Last resort for a broken object: pull out just the chat "reply" so the owner still gets a sensible answer. */
+    public static function salvageReply(string $text): ?string
+    {
+        if (! preg_match('/"reply"\s*:\s*"((?:[^"\\\\]|\\\\.)*)/su', $text, $m)) return null;
+        $v = json_decode('"'.rtrim($m[1], '\\').'"');
+        $v = is_string($v) ? self::text($v, 900) : '';
+        return $v !== '' && ! self::isUnsafe($v) ? $v : null;
+    }
+
+    /** True when a model reply is (or contains) JSON - such text must never be shown to the owner as a chat message. */
+    public static function looksLikeJson(string $text): bool
+    {
+        return (bool) preg_match('/^\s*(```(?:json)?\s*)?[\[{]|"(?:reply|quick_replies|diagnosis|stage)"\s*:/i', $text);
     }
 
     /** Run one chat turn. @return array{ok:bool,data?:array,error?:string,tokens:int} */
@@ -188,16 +225,27 @@ P;
     {
         if (! AiClient::configured()) return ['ok' => false, 'error' => 'off', 'tokens' => 0];
         $turns = count(array_filter($history, fn ($h) => $h['role'] === 'user')) + 1;
-        $text = AiClient::chat(self::messages($profile, $history, $message, $turns), ['temperature' => 0.35, 'max_tokens' => 1500, 'timeout' => 60]);
-        $u = AiClient::lastUsage();
-        $tokens = $u['in'] + $u['out'];
-        if ($text === null) return ['ok' => false, 'error' => 'ai', 'tokens' => $tokens];
-        $d = self::decode($text);
-        if ($d === null) {   // the model answered in plain prose: show it as an ordinary chat message
-            $prose = self::text(preg_replace('/^```(?:json)?|```$/m', '', $text), 900);
-            return $prose !== '' && ! self::isUnsafe($prose) ? ['ok' => true, 'data' => ['reply' => $prose, 'quick_replies' => [], 'facts' => [], 'stage' => 'asking', 'diagnosis' => null], 'tokens' => $tokens] : ['ok' => false, 'error' => 'bad', 'tokens' => $tokens];
+        $tokens = 0;
+
+        for ($try = 0; $try < 2; $try++) {   // one retry when the model's answer is cut off or malformed
+            $msgs = self::messages($profile, $history, $message, $turns);
+            if ($try === 1) $msgs[0]['content'] .= "\nIMPORTANT: your previous answer was invalid. Reply with ONE complete, compact JSON object only.";
+            $text = AiClient::chat($msgs, ['temperature' => $try ? 0.2 : 0.35, 'max_tokens' => $try ? 2600 : 2200, 'timeout' => 70]);
+            $u = AiClient::lastUsage();
+            $tokens += $u['in'] + $u['out'];
+            if ($text === null) return ['ok' => false, 'error' => 'ai', 'tokens' => $tokens];
+
+            $d = self::decode($text);
+            if ($d !== null && ($clean = self::sanitize($d))) return ['ok' => true, 'data' => $clean, 'tokens' => $tokens];
+
+            if (! self::looksLikeJson($text)) {   // plain prose: show it as an ordinary chat message
+                $prose = self::text($text, 900);
+                if ($prose !== '' && ! self::isUnsafe($prose)) return ['ok' => true, 'data' => ['reply' => $prose, 'quick_replies' => [], 'facts' => [], 'zones' => [], 'stage' => 'asking', 'diagnosis' => null], 'tokens' => $tokens];
+            }
+            if ($try === 1 && ($reply = self::salvageReply($text))) {
+                return ['ok' => true, 'data' => ['reply' => $reply, 'quick_replies' => [], 'facts' => [], 'zones' => [], 'stage' => 'asking', 'diagnosis' => null], 'tokens' => $tokens];
+            }
         }
-        $clean = self::sanitize($d);
-        return $clean ? ['ok' => true, 'data' => $clean, 'tokens' => $tokens] : ['ok' => false, 'error' => 'bad', 'tokens' => $tokens];
+        return ['ok' => false, 'error' => 'bad', 'tokens' => $tokens];
     }
 }

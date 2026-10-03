@@ -74,8 +74,10 @@ class SettingController extends Controller
             'Assistant & voice' => ['ti-microphone', [
                 ['assistant.enabled', 'Show the AI assistant on the site', 'bool', ''],
                 ['assistant.name', 'Assistant name', 'text', ''],
-                ['assistant.greeting', 'Greeting line', 'text', 'Shown under "Hello there!". Default (Hindi): नमस्ते! मैं आपका स्मार्ट असिस्टेंट हूँ। मैं आपकी कैसे मदद कर सकता हूँ?'],
-                ['assistant.require_lead', 'Ask new visitors for their details before chatting', 'bool', 'Saved as a lead in Admin → Leads (type "chatbot").'],
+                ['assistant.greeting', 'Greeting line', 'text', 'Shown under "Hello there!". Default: the site name + "Smart Assistant" welcome line.'],
+                ['assistant.require_lead', 'Ask visitors for their details after the free messages', 'bool', 'Saved as a lead in Admin → Leads (type "chatbot"). Visitors chat freely first, then see the details form.'],
+                ['assistant.free_messages', 'Free messages before the details form (assistant & Roast my car)', 'number', 'Default 3. Set 0 to ask for details straight away.'],
+                ['assistant.free_messages_mechanic', 'Free messages before the details form (Online mechanic)', 'number', 'Default 4 - a diagnosis needs a few questions.'],
                 ['assistant.otp_required', 'Verify email with a one-time code', 'bool', 'Free: the code is sent with your site mail settings (MAIL_* in .env).'],
                 ['assistant.business_facts', 'Business facts the assistant should know', 'textarea', 'Opening hours, showroom/dealer addresses, services, current offers, finance/exchange/warranty policies... one fact per line. The assistant answers questions about your business from this plus the contact details in General.'],
                 ['assistant.extra_instructions', 'Extra personality / business rules', 'textarea', 'e.g. "Always suggest booking a test drive. Never discuss competitor dealerships."'],

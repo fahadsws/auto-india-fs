@@ -13,7 +13,7 @@
 @endpush
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">Car Loan EMI Calculator</h1><p>Plan your car purchase — see your monthly EMI, interest and total payable in seconds.</p></div></div>
+@include('site.partials.crumb', ['title' => 'Car Loan EMI Calculator', 'trail' => []])
 @include('site.partials.ad-horizontal', ['ads' => $homeSettings->adsFor('horizontal')])
 
 <div class="w"><div class="article-wrap emi-wrap">

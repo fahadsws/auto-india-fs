@@ -25,6 +25,8 @@ class MechanicTest extends TestCase
     private function fakeAi(array|string $payload, array $usage = ['prompt_tokens' => 400, 'completion_tokens' => 300]): void
     {
         Setting::put('ai.api_key', 'k');
+        Setting::put('assistant.limit_min_gap', '0');
+        Http::swap(new \Illuminate\Http\Client\Factory());   // a fresh fake each time, so a script can change between calls
         Http::fake(['*' => Http::response(['choices' => [['message' => ['content' => is_string($payload) ? $payload : json_encode($payload)]]], 'usage' => $usage])]);
     }
 
@@ -46,13 +48,45 @@ class MechanicTest extends TestCase
 
     public function test_page_renders_and_is_in_the_sitemap(): void
     {
-        $this->get('/online-mechanic')->assertOk()->assertSee('Mechanic Bhai')->assertSee('Gaadi ki Job Card');
+        $this->get('/online-mechanic')->assertOk()->assertSee('Auto Mechanic')->assertSee('Vehicle details');
         $this->get('/sitemap.xml')->assertSee('/online-mechanic');
     }
 
-    public function test_unverified_visitor_gets_the_gate(): void
+    public function test_visitor_chats_freely_then_gets_the_gate(): void
     {
-        $this->postJson('/online-mechanic/chat', $this->body())->assertStatus(401)->assertJson(['gate' => true]);
+        Setting::put('assistant.free_messages_mechanic', '2');
+        $this->fakeAi(['reply' => 'Which car is it?', 'quick_replies' => [], 'facts' => [], 'stage' => 'asking', 'diagnosis' => null]);
+        $first = $this->postJson('/online-mechanic/chat', $this->body())->assertOk();
+        $anon = ['X-Assistant-Token' => $first->json('token')];
+        $this->postJson('/online-mechanic/chat', $this->body(), $anon)->assertOk();
+        $this->postJson('/online-mechanic/chat', $this->body(), $anon)->assertStatus(401)->assertJson(['gate' => true]);
+    }
+
+    public function test_truncated_or_wrapped_json_never_reaches_the_chat(): void
+    {
+        // Cut off mid-object (token limit): the reply is still recovered and no JSON is shown.
+        $cut = '{"reply":"Does the noise happen only when braking?","quick_replies":["Yes","No"],"facts":{"symptom":"noise"},"stage":"asking","diag';
+        $this->fakeAi($cut);
+        $r = $this->postJson('/online-mechanic/chat', $this->body(), $this->verified())->assertOk();
+        $this->assertSame('Does the noise happen only when braking?', $r->json('reply'));
+        $this->assertStringNotContainsString('{', $r->json('reply'));
+
+        // Prose around fenced JSON.
+        $this->fakeAi("Sure!\n```json\n".json_encode(['reply' => 'Tell me the car age.', 'stage' => 'asking', 'quick_replies' => []])."\n```");
+        $this->postJson('/online-mechanic/chat', $this->body(), $this->verified())->assertOk()->assertJsonPath('reply', 'Tell me the car age.');
+
+        // Hopeless JSON-looking garbage: a calm retry message, never the raw text.
+        $this->fakeAi('{"diagnosis": {"title": ');
+        $r = $this->postJson('/online-mechanic/chat', $this->body(), $this->verified())->assertOk();
+        $this->assertStringNotContainsString('diagnosis', $r->json('reply'));
+        $this->assertTrue($r->json('degraded'));
+    }
+
+    public function test_repair_closes_a_cut_off_object(): void
+    {
+        $d = Mechanic::decode('{"reply":"Hi there","quick_replies":["a","b"],"facts":{"car":"Swi');
+        $this->assertSame('Hi there', $d['reply']);
+        $this->assertSame(['a', 'b'], $d['quick_replies']);
     }
 
     public function test_asking_turn_passes_quick_replies_and_facts(): void

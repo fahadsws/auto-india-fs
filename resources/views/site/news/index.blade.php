@@ -3,7 +3,7 @@
 @section('description', 'Fresh car news, launches, reviews and buying guides from India’s automotive world.')
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">{{ $category ? $category->name : 'Car News' }}</h1><p>{{ $q ? 'Results for “'.$q.'”' : 'Launches, reviews, buying guides and industry updates.' }}</p></div></div>
+@include('site.partials.crumb', ['title' => $category ? $category->name : 'Car News', 'trail' => $category ? [['Car News', route('news.index')]] : [], 'tag' => $q ? 'Results for “'.$q.'”' : null])
 <div class="w fx-layout">
   @include('site.partials.sidebar', ['filters' => $filters, 'clear' => $category ? route('news.category', $category) : route('news.index'), 'adPage' => 'news'])
   <div class="fx-main">

@@ -2,7 +2,7 @@
 @section('title', 'Contact Us | '.\App\Models\Setting::get('site.name'))
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">Contact us</h1><p>Questions, feedback or partnerships — we'd love to hear from you.</p></div></div>
+@include('site.partials.crumb', ['title' => 'Contact us', 'trail' => []])
 <div class="w" style="padding-top:40px"><div class="grid" style="grid-template-columns:1fr 1.2fr;align-items:start">
   <div class="aside-box"><h3>Get in touch</h3>
     <p><i class="ti ti-mail" style="color:var(--red)"></i> {{ \App\Models\Setting::get('site.email') }}</p><p><i class="ti ti-phone" style="color:var(--red)"></i> {{ \App\Models\Setting::get('site.phone') }}</p><p><i class="ti ti-map-pin" style="color:var(--red)"></i> {{ \App\Models\Setting::get('site.address') }}</p>

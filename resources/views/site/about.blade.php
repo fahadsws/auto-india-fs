@@ -3,7 +3,7 @@
 @section('description', \App\Models\Setting::get('site.about'))
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">About {{ \App\Models\Setting::get('site.name') }}</h1><p>{{ \App\Models\Setting::get('site.tagline') }}</p></div></div>
+@include('site.partials.crumb', ['title' => 'About '.\App\Models\Setting::get('site.name'), 'trail' => []])
 <div class="w" style="max-width:820px;padding-top:40px">
   <div class="prose"><p>{{ \App\Models\Setting::get('site.about') }}</p></div>
   <div class="grid" style="margin-top:30px">

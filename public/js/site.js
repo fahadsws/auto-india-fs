@@ -23,7 +23,7 @@
     fab: $('#agFab'), tip: $('#agTip'), left: $('#agLeft'), hello: $('#agHello') };
   const views = { load: $('#vLoad'), lead: $('#vLead'), otp: $('#vOtp'), chat: $('#vChat'), fb: $('#vFb') };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false;
+  let token = '', visitor = '', history = [], sent = 0, rated = false, state = 'load', booted = false, queued = null, freeLeft = null;
   let speakOn = false, voiceMode = false, rec = null, audio = null, busy = false, cooldownUntil = 0, lang = 'en', cid = '';
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }, del: k => { try { localStorage.removeItem(k) } catch (e) {} } };
   token = store.get('aw_token') || '';
@@ -31,7 +31,7 @@
   const paintSpeak = () => { el.speak.innerHTML = '<i class="ti ti-volume' + (speakOn ? '' : '-off') + '"></i>'; el.speak.classList.toggle('on', speakOn); };
   paintSpeak();
   // Widget text is English; the assistant itself mirrors the visitor's language (English / Hindi / Hinglish).
-  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please try again.', wrong: 'Something went wrong. Please try again.', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
+  const T = { en: { left: n => n > 0 ? n + ' message' + (n === 1 ? '' : 's') + ' left today' : 'Daily limit reached', resend: s => s > 0 ? 'Resend code in ' + s + 's' : 'Resend code', conn: 'Connection problem. Please check your internet and try again.', wrong: 'Something went wrong on our side. Please try again in a moment.', expired: 'Your session has expired. Please refresh the page and try again.', toofast: 'You are sending messages too quickly. Please wait a moment.', free: n => n > 0 ? n + ' free message' + (n === 1 ? '' : 's') + ' left' : '', gateNote: 'To continue chatting, please share your details once. It takes less than a minute.', tabNew: 'New car', tabUsed: 'Used car', tabSell: 'Sell my car', wait: 'Please wait ', sec: 's…', think: 'Thinking…', speaking: 'Speaking…', listening: 'Listening… speak now', nocatch: "Didn't catch that — tap the mic to stop, or keep talking", mic: 'Please allow microphone access to talk to ' + name + '.', nosr: 'Voice input is not supported in this browser. Please use Chrome, Edge or Safari, or type your question.', hello: 'Hello', hello2: 'Hello there!', novoice: 'Voice is unavailable right now.', tap: 'Tap the mic or speaker to enable voice', resume: 'Tap the mic to continue talking', code6: 'Enter the 6-digit code.', name: 'Please enter your name.', phone: 'Enter a valid 10-digit Indian mobile number.', email: 'Enter a valid email address.', src: 'From our site' } };
   const tr = k => T.en[k];
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -48,6 +48,16 @@
     return { ok: r.ok, status: r.status, data };
   };
   const firstError = d => (d.errors && Object.values(d.errors)[0] && Object.values(d.errors)[0][0]) || d.message || tr('wrong');
+  // Never show a raw server / framework error to a visitor: only messages we wrote ourselves (they carry a `reason`) or validation text.
+  const errText = r => {
+    const d = r.data || {};
+    if (r.status === 0) return tr('conn');
+    if (r.status === 419) return tr('expired');
+    if (r.status === 429 && !d.reason) return tr('toofast');
+    if (r.status >= 500 && !d.reason) return tr('wrong');
+    if (r.status === 404 || r.status === 405) return tr('wrong');
+    return firstError(d);
+  };
 
   /* ---------- open / close ---------- */
   function open() {
@@ -74,10 +84,14 @@
   async function boot() {
     booted = true; show('load');
     const r = await api(ag.dataset.me).catch(() => null);
-    if (r && r.ok && r.data.verified) { enter(r.data); }
-    else if (r && r.ok && r.data.gate) { store.del('aw_token'); token = ''; show('lead'); }
-    else if (r && r.ok) { enter(r.data); }
-    else { show('lead'); }
+    if (r && r.ok && r.data.gate) { showLead(); }
+    else if (r && r.ok) { enter(r.data); }       // verified, or still within the free messages
+    else { enter({}); }                           // could not reach the server: let them try, errors are handled per message
+  }
+  // The details form appears only once the free messages are used (or when the site owner sets 0 free messages).
+  function showLead(withNote) {
+    const n = $('#leadNote'); if (n) { n.textContent = withNote ? tr('gateNote') : ''; n.hidden = !withNote; }
+    show('lead');
   }
   // Clears every old conversation of this visitor on the server and switches to the fresh session token it returns.
   const newSession = () => (pending = api(ag.dataset.reset, { wipe: 1 }).then(r => { if (r && r.ok && r.data.token) { token = r.data.token; store.set('aw_token', token); } }).catch(() => {}));
@@ -85,6 +99,7 @@
     if (d.token) { token = d.token; store.set('aw_token', token); }
     visitor = (d.name || '').split(' ')[0]; visitorPhone = d.phone || ''; visitorCity = d.city || '';
     el.hello.textContent = visitor ? tr('hello') + ', ' + visitor + '!' : tr('hello2');
+    freeLeft = typeof d.free_left === 'number' ? d.free_left : null;
     if (typeof d.left === 'number') leftHint(d.left);
     show('chat'); setTimeout(() => el.text.focus(), 350);
     const st = loadState(), restored = !!(st && st.items && st.items.length);
@@ -96,9 +111,10 @@
     if (speakOn && !restored && store.get('aw_greeted') !== today) { store.set('aw_greeted', today); setTimeout(() => speak(ag.dataset.greet), 500); }
     if (!restored) store.set('aw_greeted', today);
     if (restored && st.voice) { el.mic.classList.add('resume'); status(tr('resume')); setTimeout(() => { if (!voiceMode) status(''); }, 6000); }
+    if (queued) { const p = queued; queued = null; setTimeout(() => send(p), 400); }   // the message that triggered the details form
   }
   let lastLeft = null;
-  const leftHint = n => { lastLeft = n; el.left.textContent = tr('left')(n); };
+  const leftHint = n => { lastLeft = n; el.left.textContent = freeLeft !== null && freeLeft > 0 && n > 0 ? tr('free')(freeLeft) : tr('left')(n); };
 
   /* ---------- step 1: lead form ---------- */
   const fLead = views.lead, eLead = $('#eLead');
@@ -114,7 +130,7 @@
     const btn = $('button[type=submit]', fLead); btn.disabled = true;
     const r = await api(ag.dataset.lead, v).catch(() => ({ ok: false, data: { message: tr('conn') } }));
     btn.disabled = false;
-    if (!r.ok) { eLead.textContent = firstError(r.data); return; }
+    if (!r.ok) { eLead.textContent = errText(r); return; }
     if (r.data.verified) return enter(r.data);
     $('#otpMail').textContent = r.data.email || v.email;
     show('otp'); startResend(60); $('#otpBoxes input').focus();
@@ -136,8 +152,8 @@
     const r = await api(ag.dataset.verify, { code }).catch(() => ({ ok: false, data: { message: tr('conn') } }));
     btn.disabled = false;
     if (!r.ok) {
-      eOtp.textContent = firstError(r.data); const w = $('#otpBoxes'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
-      boxes.forEach(b => b.value = ''); boxes[0].focus(); if (r.data.restart) show('lead'); return;
+      eOtp.textContent = errText(r); const w = $('#otpBoxes'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
+      boxes.forEach(b => b.value = ''); boxes[0].focus(); if (r.data.restart) showLead(); return;
     }
     enter(r.data);
   });
@@ -146,7 +162,7 @@
     resend.disabled = true; const r = await api(ag.dataset.lead, v).catch(() => null);
     if (r && r.ok) { eOtp.textContent = ''; boxes.forEach(b => b.value = ''); boxes[0].focus(); startResend(60); } else { eOtp.textContent = r ? firstError(r.data) : tr('conn'); startResend(r && r.data.retry_after || 30); }
   });
-  $('#otpBack').addEventListener('click', () => show('lead'));
+  $('#otpBack').addEventListener('click', () => showLead());
 
   /* ---------- chat: everything visible is kept in `items` (sessionStorage) so the conversation survives refresh and page changes ---------- */
   let items = [], visitorPhone = '', visitorCity = '';
@@ -163,13 +179,22 @@
   const typing = () => { const d = document.createElement('div'); d.className = 'aw-msg bot aw-typing'; d.innerHTML = '<i></i><i></i><i></i>'; el.msgs.appendChild(d); down(); return d; };
 
   function push(it, animate) { items.push(it); render(it, animate); persist(); return it; }
-  function restore(st) { items = (st.items || []).filter(i => ['msg', 'links', 'act'].includes(i.k)); history = st.history || []; sent = st.sent || 0; rated = !!st.rated; if (st.lang) lang = st.lang; items.forEach(it => render(it, false)); }
+  function restore(st) { items = (st.items || []).filter(i => ['msg', 'links', 'act', 'chips'].includes(i.k)); history = st.history || []; sent = st.sent || 0; rated = !!st.rated; if (st.lang) lang = st.lang; items.forEach(it => render(it, false)); }
 
   function render(it, animate) {
     el.hero.classList.add('gone');
     if (it.k === 'msg') return bubble(it, animate);
     if (it.k === 'links') return cards(it);
     if (it.k === 'act') return actionBtn(it);
+    if (it.k === 'chips') return chipRow(it);
+  }
+
+  /* tap-able answers (New / Used tabs, budget, city): each one is sent as the visitor's next message */
+  function clearChips() { items = items.filter(i => i.k !== 'chips'); $$('.aw-quick', el.msgs).forEach(n => n.remove()); }
+  function chipRow(it) {
+    const w = document.createElement('div'); w.className = 'aw-quick';
+    it.chips.forEach(c => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.label; b.addEventListener('click', () => send(c.q, false, c.label)); w.appendChild(b); });
+    el.msgs.appendChild(w); down();
   }
 
   function bubble(it, animate) {
@@ -203,23 +228,29 @@
     el.msgs.appendChild(a); down();
   }
 
-  async function send(text, viaVoice) {
+  async function send(text, viaVoice, label) {
     text = (text || '').trim().slice(0, 300);
     if (!text || busy) return;
+    clearChips();
     if (Date.now() < cooldownUntil) { status(tr('wait') + Math.ceil((cooldownUntil - Date.now()) / 1000) + tr('sec')); return; }
-    busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); add('user', text); const t = typing(); status(viaVoice ? tr('think') : '');
+    busy = true; ag.classList.add('busy'); el.form.classList.add('busy'); const mine = add('user', label || text); const t = typing(); status(viaVoice ? tr('think') : '');
     let r;
     try { r = await api(ag.dataset.chat, { message: text, history: history.slice(-6), voice: !!(viaVoice || voiceMode), cid }); }
     catch (err) { r = { ok: false, status: 0, data: { message: tr('conn') } }; }
     t.remove(); busy = false; ag.classList.remove('busy'); status('');
-    if (r.status === 401 && r.data.gate) { store.del('aw_token'); token = ''; show('lead'); return; }
+    if (r.status === 401 && r.data.gate) {      // free messages used: take the details, then send this message again
+      items = items.filter(i => i !== mine); if (el.msgs.lastElementChild && el.msgs.lastElementChild.classList.contains('me')) el.msgs.lastElementChild.remove();
+      queued = text; persist(); showLead(true); return;
+    }
     if (!r.ok) {
       if (r.data.retry_after) cooldownUntil = Date.now() + Math.min(r.data.retry_after, 60) * 1000;
-      add('err', r.data.message || tr('wrong'));
+      add('err', errText(r));
       if (['daily_messages', 'daily_tokens', 'lifetime_tokens', 'ip_tokens', 'blocked'].includes(r.data.reason)) { leftHint(0); el.text.disabled = true; }
       if (voiceMode) listen(); return;
     }
     const d = r.data; sent++;
+    if (d.token && !token) { token = d.token; store.set('aw_token', token); }   // keeps the free-message count with this visitor
+    if (freeLeft !== null && freeLeft > 0) freeLeft--;
     if (d.lang === 'hi' || d.lang === 'en') { lang = d.lang; if (lastLeft !== null) leftHint(lastLeft); }
     history.push({ role: 'user', content: text }, { role: 'assistant', content: d.answer.slice(0, 300) });
     add('bot', d.answer, d.source === 'kb' ? tr('src') : '', true);
@@ -229,12 +260,30 @@
       if (a.type === 'link') push({ k: 'act', url: a.url, label: a.label });
       else if (a.type === 'navigate') { push({ k: 'act', url: a.url, label: a.label }); nav = a; }
     });
+    if (d.chips && d.chips.length) push({ k: 'chips', chips: d.chips });
     if (typeof d.left === 'number') leftHint(d.left);
     if (speakOn || viaVoice || voiceMode) await speak(d.answer);
     if (voiceMode) listen();
     if (nav && nav.auto) { persist(); setTimeout(() => { persist(); location.href = nav.url; }, reduce ? 300 : 1500); }   // open the real page; the chat comes along
   }
   el.form.addEventListener('submit', e => { e.preventDefault(); const v = el.text.value.trim(); if (v) { el.text.value = ''; send(v); } });
+  /* First-step tabs: New car / Used car / Sell my car. Answered by the server without the AI, then the visitor is guided with tap-able options. */
+  async function choose(intent) {
+    if (busy) return;
+    clearChips(); busy = true; ag.classList.add('busy');
+    add('user', { new: tr('tabNew'), used: tr('tabUsed'), sell: tr('tabSell') }[intent]); const t = typing();
+    let r; try { r = await api(ag.dataset.chat, { intent, cid }); } catch (err) { r = { ok: false, status: 0, data: {} }; }
+    t.remove(); busy = false; ag.classList.remove('busy');
+    if (!r.ok) { add('err', errText(r)); return; }
+    const d = r.data; if (d.token && !token) { token = d.token; store.set('aw_token', token); }
+    history.push({ role: 'assistant', content: d.answer.slice(0, 300) });
+    add('bot', d.answer, '', true);
+    (d.actions || []).forEach(a => push({ k: 'act', url: a.url, label: a.label }));
+    if (d.chips && d.chips.length) push({ k: 'chips', chips: d.chips });
+    if (typeof d.left === 'number') leftHint(d.left);
+    if (speakOn) speak(d.answer);
+  }
+  $('#agTabs') && $('#agTabs').addEventListener('click', e => { const b = e.target.closest('button[data-intent]'); if (b) choose(b.dataset.intent); });
   $('#agSuggest') && $('#agSuggest').addEventListener('click', e => { const b = e.target.closest('button[data-q]'); if (b) send(b.dataset.q); });
 
   /* New chat: clear the conversation but keep the voice working - the assistant greets again and, if the visitor was
@@ -245,7 +294,7 @@
     Array.from(el.msgs.children).forEach(n => { if (n !== el.hero) n.remove(); }); el.hero.classList.remove('gone'); el.text.value = ''; el.text.disabled = false; el.mic.classList.remove('resume');
     cid = newCid(); try { sessionStorage.setItem(CKEY, cid); } catch (e) {}
     if (token) newSession();
-    if (state !== 'chat' && token) show('chat'); else if (!token) { show('lead'); return; }
+    if (state !== 'chat') show('chat');
     ready = true; persist();
     if (speakOn || wasVoice) {
       if (wasVoice) voiceMode = true;     // keep the mic state while the greeting is spoken

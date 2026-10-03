@@ -8,6 +8,7 @@ use App\Models\AssistantOtp;
 use App\Models\AssistantSession;
 use App\Models\Lead;
 use App\Models\Setting;
+use App\Http\Middleware\EnsureAssistantSession;
 use App\Services\AssistantGuard;
 use App\Services\LeadNotifier;
 use Illuminate\Http\Request;
@@ -23,14 +24,20 @@ class AssistantLeadController extends Controller
     public function me(Request $r)
     {
         $s = $this->resolve($r);
-        $gate = Setting::bool('assistant.require_lead', true);
-        $ok = ! $gate || ($s?->lead_id && (! Setting::bool('assistant.otp_required', true) || $s->lead?->email_verified_at));
+        $verified = EnsureAssistantSession::verified($s);
+        $feature = $r->query('feature') === 'mechanic' ? 'mechanic' : 'assistant';
+        $free = EnsureAssistantSession::freeLimit($feature);
+        $gateOn = Setting::bool('assistant.require_lead', true);
+        $used = (int) ($s?->messages_total ?? 0);
+        // Not verified yet: the visitor may still chat until the free messages are used up; only then is the details form shown.
+        $gate = $gateOn && ! $verified && $used >= $free;
         return response()->json([
-            'gate' => $gate && ! $ok,
-            'verified' => (bool) $ok && (bool) $s,
-            'name' => $s?->lead?->name,
+            'gate' => $gate,
+            'verified' => $verified,
+            'name' => $verified ? $s?->lead?->name : null,
+            'free_left' => $gateOn && ! $verified ? max(0, $free - $used) : null,
             'left' => $s ? max(0, AssistantGuard::limit('msgs_day') - ($s->usage_date?->isToday() ? $s->messages_today : 0)) : AssistantGuard::limit('msgs_day'),
-            'token' => $ok ? $s?->token : null,
+            'token' => $verified ? $s?->token : null,
         ]);
     }
 
@@ -124,8 +131,14 @@ class AssistantLeadController extends Controller
 
     private function grant(Request $r, Lead $lead)
     {
-        $s = AssistantSession::firstOrNew(['lead_id' => $lead->id]);
-        if (! $s->exists) $s->token = Str::random(40);   // reuse the same row so limits can't be reset by re-registering
+        // A returning visitor keeps their one row (so limits cannot be reset by re-registering). A new one keeps the anonymous
+        // session they were already chatting in, so the conversation and its memory carry over once they sign up.
+        $s = AssistantSession::where('lead_id', $lead->id)->first();
+        if (! $s) {
+            $anon = $this->resolve($r);
+            $s = $anon && ! $anon->lead_id ? $anon : new AssistantSession(['token' => Str::random(40)]);
+            $s->lead_id = $lead->id;
+        }
         $s->fill(['ip' => $r->ip(), 'user_agent' => Str::limit((string) $r->userAgent(), 250, '')])->save();
         $r->session()->put('assistant.token', $s->token);
 
