@@ -22,9 +22,9 @@ class DatabaseSeeder extends Seeder
     public const PERMISSIONS = [
         'Dashboard' => ['admin.access'],
         'Articles' => ['articles.view', 'articles.create', 'articles.edit_own', 'articles.edit_all', 'articles.publish', 'articles.delete'],
-        'Content' => ['categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'pages.manage', 'seo.manage'],
-        'Cars & Leads' => ['listings.manage', 'leads.view', 'leads.manage'],
-        'System' => ['users.manage', 'roles.manage', 'settings.manage', 'automation.manage'],
+        'Content' => ['categories.manage', 'sources.manage', 'videos.manage', 'cars.manage', 'comparisons.manage', 'car_masters.manage', 'pages.manage', 'seo.manage'],
+        'Cars & Leads' => ['listings.manage', 'leads.view', 'leads.manage', 'assistant.manage'],
+        'System' => ['users.manage', 'roles.manage', 'settings.manage', 'home.manage', 'menus.manage', 'automation.manage', 'data.reset'],
     ];
 
     public function run(): void
@@ -37,10 +37,10 @@ class DatabaseSeeder extends Seeder
         $all = Permission::pluck('name')->all();
 
         Role::findOrCreate('Super Admin', 'web');
-        Role::findOrCreate('Admin', 'web')->syncPermissions(array_diff($all, ['roles.manage']));
+        Role::findOrCreate('Admin', 'web')->syncPermissions(array_diff($all, ['roles.manage', 'data.reset']));   // wiping site data is Super Admin only unless granted on purpose
         Role::findOrCreate('Editor', 'web')->syncPermissions([
             'admin.access', 'articles.view', 'articles.create', 'articles.edit_own', 'articles.edit_all', 'articles.publish', 'articles.delete',
-            'categories.manage', 'videos.manage', 'sources.manage', 'cars.manage', 'pages.manage', 'seo.manage',
+            'categories.manage', 'videos.manage', 'sources.manage', 'cars.manage', 'comparisons.manage', 'car_masters.manage', 'pages.manage', 'seo.manage',
         ]);
         Role::findOrCreate('Author', 'web')->syncPermissions(['admin.access', 'articles.view', 'articles.create', 'articles.edit_own']);
         Role::findOrCreate('Sales', 'web')->syncPermissions(['admin.access', 'listings.manage', 'leads.view', 'leads.manage']);

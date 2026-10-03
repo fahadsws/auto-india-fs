@@ -45,3 +45,16 @@
 
 ## "Just launched" cards
 - The row list became a card grid like the other home sections: brand + status chip, image on a soft red-glow panel, name, fuel/body line, "From" price and an arrow button; 2 columns on phones.
+
+# Reset site data + complete admin permissions
+
+## Reset site data
+- `App\Services\DataReset` truncates **every table except** `users`, `settings`, `roles`, `permissions`, `model_has_roles`, `model_has_permissions`, `role_has_permissions`, `sessions`, `password_reset_tokens` and `migrations` (so new tables are covered automatically). Foreign keys are switched off while truncating, ids restart, caches are flushed. Optional extra keeps: menus, home settings, SEO entries, pages.
+- Admin: **System -> Reset site data** (`/admin/data-reset`) shows the row counts, then needs the permission `data.reset` (Super Admin only by default), the word `RESET` and the admin's password; the action is logged and throttled.
+- CLI: `php artisan data:reset [--keep=menu_items] [--force]` (refuses in production without `--force`).
+- Uploaded image files and the knowledge-base index are not rebuilt: re-index from Settings afterwards.
+
+## Permissions for every sidebar item
+- New granular permissions: `comparisons.manage`, `car_masters.manage`, `home.manage`, `menus.manage`, `data.reset`; `assistant.manage` is now also in the role editor. Routes and sidebar use them.
+- Migration `2026_10_03_000002_add_missing_admin_permissions`: existing roles keep their access (holders of `cars.manage` get comparisons + car masters, holders of `settings.manage` get home settings + menus). `data.reset` is granted to nobody.
+- A test fails if a permission is used in the sidebar/routes but is missing from the role editor.
