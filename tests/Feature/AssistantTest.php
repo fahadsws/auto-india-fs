@@ -50,11 +50,74 @@ class AssistantTest extends TestCase
         Http::fake(['ai.test/*' => fn () => Http::response(['choices' => [['message' => ['content' => $this->aiText]]], 'usage' => ['prompt_tokens' => $in, 'completion_tokens' => $out]])]);
     }
 
-    public function test_chat_requires_verified_lead(): void
+    public function test_chat_is_free_for_a_few_messages_then_asks_for_details(): void
     {
+        Setting::put('assistant.free_messages', '2');
+        $this->fakeAi();
+        $first = $this->postJson('/assistant/chat', ['message' => 'best suv?'])->assertOk();
+        $anon = ['X-Assistant-Token' => $first->json('token')];
+        $this->assertNotEmpty($anon['X-Assistant-Token']);
+        $this->postJson('/assistant/chat', ['message' => 'and a sedan?'], $anon)->assertOk();
+        $this->postJson('/assistant/chat', ['message' => 'one more?'], $anon)->assertStatus(401)->assertJson(['gate' => true]);
+        $this->getJson('/assistant/me', $anon)->assertJson(['gate' => true, 'verified' => false]);
+    }
+
+    public function test_zero_free_messages_asks_for_details_straight_away(): void
+    {
+        Setting::put('assistant.free_messages', '0');
         Http::fake();
         $this->postJson('/assistant/chat', ['message' => 'best suv?'])->assertStatus(401)->assertJson(['gate' => true]);
         Http::assertNothingSent();
+    }
+
+    public function test_signing_up_keeps_the_anonymous_conversation_session(): void
+    {
+        Setting::put('assistant.free_messages', '1');
+        $this->fakeAi();
+        $anon = ['X-Assistant-Token' => $this->postJson('/assistant/chat', ['message' => 'best suv?'])->json('token')];
+        $this->postJson('/assistant/chat', ['message' => 'again?'], $anon)->assertStatus(401);
+
+        $sent = null;
+        Mail::shouldReceive('raw')->andReturnUsing(function ($body) use (&$sent) { $sent = $body; });
+        $this->postJson('/assistant/lead', $this->lead, $anon)->assertOk();
+        preg_match('/is: (\d{6})/', $sent, $m);
+        $res = $this->postJson('/assistant/verify', ['code' => $m[1]], $anon)->assertOk()->assertJson(['verified' => true]);
+
+        $this->assertSame($anon['X-Assistant-Token'], $res->json('token'));   // same row: counters and memory carry over
+        $this->postJson('/assistant/chat', ['message' => 'continue please'], ['X-Assistant-Token' => $res->json('token')])->assertOk();
+    }
+
+    public function test_new_and_used_tabs_are_answered_without_the_ai_and_stick(): void
+    {
+        Http::fake();
+        $used = $this->postJson('/assistant/chat', ['intent' => 'used'])->assertOk();
+        $this->assertStringContainsString('city', Str::lower($used->json('answer')));
+        $this->assertNotEmpty($used->json('chips'));
+        Http::assertNothingSent();
+        $anon = ['X-Assistant-Token' => $used->json('token')];
+
+        $new = $this->postJson('/assistant/chat', ['intent' => 'new'], $anon)->assertOk();
+        $this->assertStringContainsString('budget', Str::lower($new->json('answer')));
+        $this->assertSame('under 5 lakh', Str::after($new->json('chips.0.q'), 'new cars '));
+        $this->assertSame('new', AssistantSession::where('token', $anon['X-Assistant-Token'])->first()->memory['f']['type']);
+        $this->postJson('/assistant/chat', ['intent' => 'bogus'], $anon)->assertStatus(422);
+    }
+
+    public function test_a_bare_new_switches_away_from_used(): void
+    {
+        foreach (['new' => 'new', 'I want a new SUV' => 'new', 'used' => 'used', 'not used, a new one' => 'new', 'second hand swift in new delhi' => 'used'] as $q => $type) {
+            $this->assertSame($type, \App\Services\SiteData::parse($q)['type'] ?? null, $q);
+        }
+        $this->assertArrayNotHasKey('type', \App\Services\SiteData::parse('new or used?'));
+    }
+
+    public function test_internal_errors_never_reach_the_visitor(): void
+    {
+        $this->fakeAi();
+        $this->mock(\App\Services\Assistant::class, fn ($m) => $m->shouldReceive('reply')->andThrow(new \RuntimeException('SQLSTATE[HY000] secret detail')));
+        $res = $this->postJson('/assistant/chat', ['message' => 'hello there car'])->assertStatus(503);
+        $this->assertStringNotContainsString('SQLSTATE', $res->getContent());
+        $this->assertSame('error', $res->json('reason'));
     }
 
     public function test_lead_validation_and_honeypot(): void
@@ -778,7 +841,7 @@ class AssistantTest extends TestCase
         $second = $this->chat($token, 'hi')->json('answer');
         $this->assertNotSame($first, $second);
         $this->assertStringNotContainsString('Good to see you', $second);
-        $this->assertStringContainsString("I'm right here", $second);
+        $this->assertStringContainsString('Hello again', $second);
     }
 
     public function test_context_sent_to_the_ai_stays_small(): void

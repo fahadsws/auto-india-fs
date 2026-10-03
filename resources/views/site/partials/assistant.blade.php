@@ -48,8 +48,9 @@
       {{-- step 1: lead form --}}
       <form class="aw-view aw-form" id="vLead" novalidate autocomplete="on">
         @include('site.partials.bubble', ['cls' => 'aw-orb-md'])
-        <h3>Welcome! Let's get acquainted</h3>
-        <p class="aw-sub">Share a few details and {{ $asstName }} will be ready to help — prices, comparisons, test drives &amp; more.</p>
+        <h3>Continue your conversation</h3>
+        <p class="aw-note" id="leadNote" hidden></p>
+        <p class="aw-sub">Share your details once and {{ $asstName }} will keep helping you with prices, comparisons, test drives &amp; more.</p>
         <label class="aw-f"><span>Full name</span><input name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rahul Sharma" required></label>
         <label class="aw-f"><span>Mobile number</span><div class="aw-ph"><b>+91</b><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit mobile" required></div></label>
         <label class="aw-f"><span>Email <em>(we'll send a verification code)</em></span><input name="email" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com" required></label>
@@ -78,13 +79,18 @@
             @include('site.partials.bubble')
             <h3 id="agHello">Hello there!</h3>
             <p class="aw-sub">{{ $greeting }}</p>
+            <div class="aw-tabs" id="agTabs" role="group" aria-label="What are you looking for?">
+              <button type="button" data-intent="new"><i class="ti ti-car"></i><b>New car</b><small>Prices, variants, launches</small></button>
+              <button type="button" data-intent="used"><i class="ti ti-steering-wheel"></i><b>Used car</b><small>Verified cars near you</small></button>
+              <a href="{{ route('sell') }}" class="aw-tab-sell"><i class="ti ti-currency-rupee"></i> Sell my car</a>
+            </div>
           </div>
         </div>
         <div class="aw-status" id="agStatus"></div>
         <form class="aw-input" id="agForm" autocomplete="off">
           <div class="aw-inner">
             <button type="button" class="aw-mic" id="agMic" title="Talk to {{ $asstName }}" aria-label="Voice conversation"><i class="ti ti-microphone"></i></button>
-            <input id="agText" placeholder="Ask anything about cars…" maxlength="300" aria-label="Your message">
+            <input id="agText" placeholder="Type your question…" maxlength="300" aria-label="Your message">
             <button class="aw-send" aria-label="Send"><i class="ti ti-arrow-up"></i></button>
           </div>
         </form>

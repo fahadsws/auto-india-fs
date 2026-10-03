@@ -3,7 +3,7 @@
 @section('title', "New $pl in India — Launches, Prices & Updates | ".\App\Models\Setting::get('site.name'))
 @section('description', "Every new $v[label] Launch in India with prices, specs, images and the latest news — updated automatically as stories break.")
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">New {{ $lo }}</h1><p>Launches, updates and upcoming models. Each page updates itself when new details are announced.</p></div></div>
+@include('site.partials.crumb', ['title' => 'New '.$lo, 'trail' => []])
 <div class="w fx-layout">
   @include('site.partials.sidebar', ['filters' => $filters, 'clear' => route($idx), 'adPage' => 'new'])
   <div class="fx-main">

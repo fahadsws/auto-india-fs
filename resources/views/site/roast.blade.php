@@ -41,8 +41,8 @@
         <section class="rst-view show" id="vWait" aria-live="polite"><div class="rst-wait"><i class="rst-spin"></i><span>Aapka challan-book khul raha hai…</span></div></section>
 
         <form class="rst-view rst-panel" id="vLead" novalidate autocomplete="on">
-          <h2>Pehle ek chhota sa parichay</h2>
-          <p class="rst-sub">Ek baar details do, email pe code verify karo — uske baad roast unlimited-jaisa (din ka limit ke saath) khula rahega. Dobara form nahi poochhenge.</p>
+          <h2>Roast jaari rakhne ke liye details do</h2>
+          <p class="rst-sub">Free roasts khatam ho gaye. Ek baar details do aur email pe code verify karo — phir roast jaari rahega (din ke limit ke saath). Dobara form nahi poochhenge.</p>
           <div class="rst-row">
             <label class="rst-f"><span>Poora naam</span><input name="name" autocomplete="name" maxlength="60" placeholder="Rahul Sharma" required></label>
             <label class="rst-f"><span>Mobile</span><div class="rst-ph"><b>+91</b><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit number" required></div></label>
@@ -141,13 +141,17 @@
   const root = document.getElementById('rst'), $ = (s, r = root) => r.querySelector(s), $$ = (s, r = root) => [...r.querySelectorAll(s)];
   const csrf = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
   const store = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
-  let token = store.get('aw_token') || '', visitor = '', card = null, last = null, busy = false;
+  let token = store.get('aw_token') || '', visitor = '', card = null, last = null, busy = false, queuedRun = false;
   const views = { wait: $('#vWait'), lead: $('#vLead'), otp: $('#vOtp'), tool: $('#vTool'), load: $('#vLoad'), res: $('#vRes') };
   const show = v => { Object.entries(views).forEach(([k, n]) => n.classList.toggle('show', k === v)); };
   const api = async (url, body) => {
     const r = await fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf, ...(token ? { 'X-Assistant-Token': token } : {}) } });
     let data = {}; try { data = await r.json(); } catch (e) {}
+    // Never show a raw server error: only messages we wrote ourselves (they carry a `reason`) or form-validation text.
+    if (!r.ok && !data.errors && ((r.status >= 500 && !data.reason) || r.status === 404 || r.status === 405 || r.status === 419 || (r.status === 429 && !data.reason))) {
+      data = { message: r.status === 419 ? 'Session expire ho gaya. Page refresh karke dobara try karo.' : r.status === 429 ? 'Bahut zyada requests. Thoda ruk kar dobara try karo.' : 'Hamari taraf se kuch gadbad ho gayi. Thodi der baad dobara try karo.' };
+    }
     return { ok: r.ok, status: r.status, data };
   };
   const firstError = d => (d.errors && Object.values(d.errors)[0] && Object.values(d.errors)[0][0]) || d.message || 'Kuch gadbad ho gayi, dobara try karo.';
@@ -161,13 +165,12 @@
     const c = store.get('rst_car'); if (c && !$('#rCar').value) $('#rCar').value = c;
     const pl = store.get('rst_plate'); if (pl && !$('#rPlate').value) $('#rPlate').value = pl;
     show('tool');
+    if (queuedRun) { queuedRun = false; setTimeout(() => run(), 300); }   // the roast that triggered the details form
   }
   (async () => {
     const r = await api(root.dataset.me).catch(() => null);
-    if (r && r.ok && r.data.verified) enter(r.data);
-    else if (r && r.ok && r.data.gate) { token = ''; try { localStorage.removeItem('aw_token'); } catch (e) {} show('lead'); }
-    else if (r && r.ok) enter(r.data);      // gate switched off in settings
-    else show('lead');
+    if (r && r.ok && r.data.gate) show('lead');   // free roasts already used
+    else enter((r && r.ok && r.data) || {});                                                                              // verified, or still within the free roasts
   })();
 
   /* ---------- lead form + email OTP (same endpoints as the assistant) ---------- */
@@ -234,8 +237,9 @@
     const r = await api(root.dataset.roast, { car, plate: $('#rPlate').value.trim(), owned: val('#rOwned') || 'y1', level: val('#rLevel') || 'medium', habits: $$('#rHabits .on').map(b => b.dataset.v), name: $('#rName').value.trim() }).catch(() => ({ ok: false, status: 0, data: { message: 'Connection problem. Dobara try karo.' } }));
     await new Promise(res => setTimeout(res, Math.max(0, 1800 - (Date.now() - t0))));   // a short beat so the "printing" feels real
     clearInterval(mt); busy = false;
-    if (r.status === 401 && r.data.gate) { show('lead'); return; }
+    if (r.status === 401 && r.data.gate) { queuedRun = true; show('lead'); return; }   // free roasts used: take the details once, then roast again
     if (!r.ok) { show('tool'); eTool.textContent = firstError(r.data); return; }
+    if (r.data.token && !token) { token = r.data.token; store.set('aw_token', token); }
     card = r.data.card; await draw(card);
     $('#rLeft').textContent = typeof r.data.left === 'number' ? 'Aaj ke ' + r.data.left + ' roast aur baaki.' : '';
     $('#rNote').textContent = ''; show('res');

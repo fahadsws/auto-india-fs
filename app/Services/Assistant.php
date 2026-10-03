@@ -276,7 +276,55 @@ class Assistant
         if ($fromAi && ! $saved && ! $memBlock && ! $actions && ! $nudge) Cache::put($ckey, ['answer' => $answer, 'source' => $source, 'links' => $links, 'sources' => $sources], now()->addDay());
 
         $m['turns']++;
-        return $this->done($session, $ip, $message, $answer, $source, $links, $voice, $m, $sources, $actions, $in, $out, $captured);
+        return $this->done($session, $ip, $message, $answer, $source, $links, $voice, $m, $sources, $actions, $in, $out, $captured, $this->chipsFor($db ?? null, $special, $bookKind, $filters, $answered));
+    }
+
+    /**
+     * First-step tabs ("New car" / "Used car" / "Sell my car"): answered without the AI. The choice is stored in the conversation
+     * memory, so everything the visitor says next is searched in that category and never drifts to the other one.
+     */
+    public function choose(string $intent, AssistantSession $session): array
+    {
+        $m = AssistantMemory::get($session);
+        $turns = $m['turns'] ?? 0;
+        $m = ['hi' => false, 'turns' => $turns] + AssistantMemory::get(new AssistantSession());
+        $actions = []; $chips = [];
+
+        if ($intent === 'new') {
+            $m['f'] = ['type' => 'new', 'vehicle' => 'car']; $m['ask'] = 'budget'; $m['asked'] = ['budget'];
+            $answer = 'New cars it is. What budget do you have in mind? You can also pick a body type.';
+            $chips = $this->budgetChips('new');
+            foreach (['SUV', 'Hatchback', 'Sedan', 'Electric'] as $b) $chips[] = ['label' => $b, 'q' => 'new '.Str::lower($b).' cars'];
+        } elseif ($intent === 'used') {
+            $m['f'] = ['type' => 'used', 'vehicle' => 'car']; $m['ask'] = 'city'; $m['asked'] = ['city'];
+            $answer = 'Used cars it is. Which city should I search in?';
+            foreach (array_slice(array_map(fn ($c) => is_array($c) ? ($c['name'] ?? '') : $c, \App\Support\Filters::CITIES), 0, 6) as $c) if ($c !== '') $chips[] = ['label' => $c, 'q' => "used cars in $c"];
+            $chips[] = ['label' => 'Anywhere', 'q' => 'Anywhere'];
+        } else {   // sell
+            $m['f'] = []; $m['ask'] = null;
+            $answer = 'You can list your car with us in a minute. Share a few details and our team will call you back with an offer.';
+            $actions[] = ['type' => 'link', 'url' => route('sell'), 'label' => 'Sell your car'];
+        }
+        AssistantMemory::save($session, $m);
+        return ['answer' => $answer, 'source' => 'none', 'links' => [], 'left' => max(0, AssistantGuard::limit('msgs_day') - ($session->usage_date?->isToday() ? $session->messages_today : 0)), 'cached' => true, 'actions' => $actions, 'chips' => $chips, 'lang' => 'en'];
+    }
+
+    /** Tap-able budget ranges; each one is a full sentence the filters understand. */
+    private function budgetChips(string $type): array
+    {
+        $word = $type === 'new' ? 'new' : 'used';
+        $ranges = $type === 'new' ? [['Under ₹5 lakh', 'under 5 lakh'], ['₹5 - 10 lakh', '5 to 10 lakh'], ['₹10 - 20 lakh', '10 to 20 lakh'], ['Above ₹20 lakh', 'above 20 lakh']]
+            : [['Under ₹3 lakh', 'under 3 lakh'], ['₹3 - 6 lakh', '3 to 6 lakh'], ['₹6 - 10 lakh', '6 to 10 lakh'], ['Above ₹10 lakh', 'above 10 lakh']];
+        return array_map(fn ($r) => ['label' => $r[0], 'q' => "$word cars ".$r[1]], $ranges);
+    }
+
+    /** Follow-up buttons shown under a search result: narrow by budget when none was given. */
+    private function chipsFor(?array $db, bool $special, $bookKind, array $filters, bool $answered): array
+    {
+        if (! $db || $special || $bookKind || empty($db['found'])) return [];
+        if (isset($filters['price_max']) || isset($filters['price_min'])) return [];
+        $type = ($filters['type'] ?? null) === 'new' || ($filters['vehicle'] ?? 'car') !== 'car' ? 'new' : 'used';
+        return $this->budgetChips($type);
     }
 
     /** "Title - price; Title - price." for the built-in fallback replies (the cards below carry the links). */
@@ -295,11 +343,11 @@ class Assistant
     }
 
     /** Remember what the visitor is looking at, enrich their lead, then build the reply. */
-    private function done(AssistantSession $s, string $ip, string $q, string $answer, string $source, array $links, bool $voice, array $m, array $sources, array $actions, int $in = 0, int $out = 0, ?array $captured = null): array
+    private function done(AssistantSession $s, string $ip, string $q, string $answer, string $source, array $links, bool $voice, array $m, array $sources, array $actions, int $in = 0, int $out = 0, ?array $captured = null, array $chips = []): array
     {
         AssistantMemory::syncLead($s, $m);
         AssistantMemory::save($s, $m);
-        return $this->finish($s, $ip, $q, $answer, $source, $links, $voice, $in, $out, $in + $out === 0, $sources, ['actions' => $actions, 'focus' => $m['focus'] ?? null, 'captured' => $captured, 'lang' => ($m['hi'] ?? true) ? 'hi' : 'en']);
+        return $this->finish($s, $ip, $q, $answer, $source, $links, $voice, $in, $out, $in + $out === 0, $sources, ['actions' => $actions, 'focus' => $m['focus'] ?? null, 'captured' => $captured, 'chips' => $chips, 'lang' => ($m['hi'] ?? false) ? 'hi' : 'en']);
     }
 
     private function finish(AssistantSession $s, string $ip, string $q, string $answer, string $source, array $links, bool $voice, int $in, int $out, bool $cached, array $sources = [], array $extra = []): array
@@ -348,16 +396,16 @@ class Assistant
     private function t(string $key, bool $hi, array $v = []): string
     {
         $set = [
-            'ask_city' => [['Sure! Which city or area are you looking in?', 'Great, let me find some good ones. Which city or area works for you?'], ['ज़रूर! आप किस शहर या इलाके में देख रहे हैं?', 'बिल्कुल! पहले बताइए, किस शहर या इलाके में चाहिए?']],
-            'ask_budget' => [['Nice! What budget are you thinking of?', 'Good choice. Roughly what budget do you have in mind?'], ['बहुत बढ़िया! आपका बजट कितना है?', 'अच्छी पसंद! लगभग कितना बजट सोचा है आपने?']],
-            'ask_type' => [['Happy to help! Are you looking for a new car or a used one?'], ['ज़रूर! आपको नई गाड़ी चाहिए या पुरानी (used)?']],
-            'opening' => [['Opening all {n} {what} for you…'], ['{n} {what} का पूरा पेज खोल रहा हूँ…']],
+            'ask_city' => [['Certainly. Which city or area are you looking in?', 'Happy to help. Which city or area should I search in?'], ['ज़रूर! आप किस शहर या इलाके में देख रहे हैं?', 'बिल्कुल! पहले बताइए, किस शहर या इलाके में चाहिए?']],
+            'ask_budget' => [['Certainly. What is your approximate budget?', 'Happy to help. Roughly what budget do you have in mind?'], ['बहुत बढ़िया! आपका बजट कितना है?', 'अच्छी पसंद! लगभग कितना बजट सोचा है आपने?']],
+            'ask_type' => [['Happy to help. Are you looking for a new car or a used one?'], ['ज़रूर! आपको नई गाड़ी चाहिए या पुरानी (used)?']],
+            'opening' => [['Opening all {n} {what} for you.'], ['{n} {what} का पूरा पेज खोल रहा हूँ…']],
             'open_label' => [['Open now'], ['अभी खोलें']],
             'view_all' => [['View all {n} cars →'], ['सभी {n} गाड़ियाँ देखें →']],
-            'found' => [["Here's what I found on our site: "], ['हमारी साइट पर यह मिला: ']],
-            'nothing' => [["I couldn't find that on our site yet. Tell me a bit more about what you're looking for, or browse our used and new cars."], ['यह जानकारी अभी हमारी साइट पर नहीं मिली। थोड़ा और बताइए कि आपको क्या चाहिए, या हमारी नई और पुरानी गाड़ियाँ देखिए।']],
-            'busy' => [['Our assistant is very busy right now. Please call our team on {phone} and we will arrange it for you.'], ['अभी हमारा असिस्टेंट बहुत व्यस्त है। कृपया हमारी टीम को {phone} पर कॉल करें, हम आपके लिए व्यवस्था कर देंगे।']],
-            'ok' => [['Noted! Anything else I can help with?'], ['ठीक है! और कुछ मदद चाहिए?']],
+            'found' => [["Here is what I found on our site: "], ['हमारी साइट पर यह मिला: ']],
+            'nothing' => [["I could not find that on our site yet. Could you share a little more about what you need, or browse our new and used cars?"], ['यह जानकारी अभी हमारी साइट पर नहीं मिली। थोड़ा और बताइए कि आपको क्या चाहिए, या हमारी नई और पुरानी गाड़ियाँ देखिए।']],
+            'busy' => [['Our assistant is unavailable for a moment. Please try again shortly or contact our team on {phone} and we will arrange it for you.'], ['अभी हमारा असिस्टेंट बहुत व्यस्त है। कृपया हमारी टीम को {phone} पर कॉल करें, हम आपके लिए व्यवस्था कर देंगे।']],
+            'ok' => [['Noted. Is there anything else I can help you with?'], ['ठीक है! और कुछ मदद चाहिए?']],
         ];
         $variants = $set[$key][$hi ? 1 : 0];
         return str_replace(array_map(fn ($k) => '{'.$k.'}', array_keys($v)), array_values($v), Arr::random($variants));
@@ -395,19 +443,19 @@ class Assistant
                 $focus = $m['focus']['t'] ?? null;
                 return $hi
                     ? ($focus ? "हाँ, बताइए{$this->ji($first)}! $focus के बारे में आगे बढ़ें?" : 'हाँ, मैं यहीं हूँ। बताइए, क्या देखना है?')
-                    : ($focus ? "I'm right here, ".($first ?: 'friend')."! Shall we continue with $focus?" : "I'm right here, ".($first ?: 'friend').' - what would you like to look at?');
+                    : ($focus ? "Hello again".($first ? ", $first" : '').". Shall we continue with $focus?" : "Hello again".($first ? ", $first" : '').'. What would you like to look at?');
             }
             return $hi
                 ? Arr::random(["नमस्ते{$this->ji($first)}! 👋 बताइए, नई गाड़ी देख रहे हैं, पुरानी, या बस जानकारी चाहिए?", "नमस्ते{$this->ji($first)}! आपके मन में क्या है — बजट, गाड़ी का टाइप, कुछ भी बताइए, हम मिलकर ढूँढ लेंगे।", "नमस्ते{$this->ji($first)}! 😊 मैं आपकी क्या मदद कर सकता हूँ?"])
-                : Arr::random(["Hey ".($first ?: 'there')."! 👋 Good to see you. What are you thinking about - a new car, a used one, or just exploring?", "Hi ".($first ?: 'there')."! Tell me what you have in mind - budget, type of car, anything - and we'll figure it out together.", "Hello ".($first ?: 'there')."! 😊 How can I help you today?"]);
+                : Arr::random(["Hello".($first ? " $first" : '').". I can help you find a new or used car, compare models or answer questions about buying. What are you looking for?", "Welcome".($first ? ", $first" : '').". Tell me your budget or the type of car you have in mind, and I will suggest suitable options.", "Hello".($first ? " $first" : '').". How can I help you today?"]);
         }
         if (preg_match('/^(thanks?|thank you|thx|ok|okay|cool|great|bye|goodbye|shukriya|dhanyavad)$/', $t)) {
             return $hi
                 ? Arr::random(["कोई बात नहीं{$this->ji($first)}! और कुछ पूछना हो तो बेझिझक बताइए।", 'आपका स्वागत है! 😊 कुछ और चाहिए तो मैं यहीं हूँ।', "ख़ुशी हुई मदद करके{$this->ji($first)}! जब भी ज़रूरत हो, पूछिए।"])
-                : Arr::random(["Anytime, ".($first ?: 'friend')."! Just ask if anything else comes up.", "You're welcome! 😊 I'm right here if you need anything else.", "My pleasure, ".($first ?: 'friend')."! Happy to help whenever."]);
+                : Arr::random(["You're welcome".($first ? ", $first" : '').". Let me know if there is anything else I can help with.", "Glad to help. Feel free to ask if you need anything else.", "My pleasure. I am here whenever you need further assistance."]);
         }
         if (preg_match('/(ignore (all |the )?(previous|above|prior)|system prompt|your instructions|api[ _-]?key|jailbreak|developer mode|reveal .*prompt)/i', $msg)) {
-            return $hi ? "यह मैं नहीं कर सकता{$this->ji($first)} — लेकिन गाड़ियों, खरीदने-बेचने या हमारी वेबसाइट के बारे में कुछ भी पूछिए!" : "That's not something I can help with, ".($first ?: 'friend')." - but ask me anything about cars, buying, selling or our website!";
+            return $hi ? "यह मैं नहीं कर सकता{$this->ji($first)} — लेकिन गाड़ियों, खरीदने-बेचने या हमारी वेबसाइट के बारे में कुछ भी पूछिए!" : "I'm unable to help with that request, but I can answer questions about cars, buying, selling or our website.";
         }
         return null;
     }
@@ -424,12 +472,12 @@ class Assistant
         $first = $s->lead?->name ? Str::before($s->lead->name, ' ') : null;
         $today = now()->format('l, Y-m-d');
 
-        $persona = "You are $name, the friendly car-buying assistant of $site (Indian new + used cars, news and a marketplace), chatting with ".($first ?: 'a visitor').($s->lead?->city ? " from {$s->lead->city}" : '').'. '
-            .'LANGUAGE: reply in the SAME language and script the visitor used in their latest message - English, Hindi (Devanagari), Hinglish (Hindi in Roman letters), Marathi, Gujarati, Tamil, Telugu, Bengali or any other - and switch when they switch. If it is unclear, use English. Keep everyday English words (test drive, EMI, SUV, diesel, showroom) as people say them, and write prices in rupees in the style of that language. '
-            .'STYLE: warm and human, like a good salesperson on a call: react first, then answer; 2-4 short sentences; ask ONE question at a time; use their first name only now and then. Never say you are an AI/bot or mention "database", prompts or rules. Be honest if unsure; never invent stock, prices, offers, dealers or details. Chat about anything, but cars are your home turf; gently steer back from unrelated topics. '
-            .($voice ? 'This reply will be SPOKEN: plain sentences, no markdown, lists, URLs or emojis. ' : 'Light **bold** is fine, no long lists. ')
-            ."\nANSWER FIRST: answer exactly what they asked, using the website data below when it applies (quote prices, names and dates as given). The visitor may write in Hinglish with typos or loose wording - understand the meaning, never ask them to repeat or rephrase. Do not repeat your earlier wording or re-offer something they already ignored."
-            ."\nGOAL: be genuinely helpful. Only when the visitor clearly shows buying intent, or asks, offer a test drive, inspection or callback - at most once in a while, never in every reply. If they decline, respect it and keep helping."
+        $persona = "You are $name, the virtual assistant of $site (new cars, used cars, car news, calculators and a used-car marketplace in India), speaking with ".($first ?: 'a visitor').($s->lead?->city ? " from {$s->lead->city}" : '').'. '
+            .'LANGUAGE: reply in clear, professional English by default. If the visitor writes in another language or script (Hindi in Devanagari, Hinglish in Roman letters, Marathi, Gujarati, Tamil, Telugu, Bengali...), reply in that same language and script, and switch again when they switch. Keep everyday English terms (test drive, EMI, SUV, diesel, on-road price, showroom) as they are, and write prices in rupees (lakh / crore). '
+            .'TONE: professional, polite and precise, like a senior advisor at a reputable dealership. No slang or casual filler (no "bhai", "boss", "dost", "yaar"), no jokes, no more than one exclamation mark, emojis only if the visitor uses them. Do not greet again after the first message. Give the answer first, in 2-4 short sentences; use a short list only to compare three or more options. End with ONE clear next step or ONE question, not several. If asked who you are, say you are the site\'s virtual assistant. Be honest when unsure; never invent stock, prices, offers, dealers or specifications. Stay with cars, buying, selling, ownership and this website; for an unrelated topic decline in one polite sentence and offer to help with cars. '
+            .($voice ? 'This reply will be SPOKEN: plain sentences, no markdown, lists, URLs or emojis. ' : 'Plain text; light **bold** is fine, no long lists. ')
+            ."\nANSWER FIRST: answer exactly what they asked, using the website data below when it applies (quote prices, names and dates as given). The visitor may write in Hinglish with typos or loose wording - understand the meaning, never ask them to repeat or rephrase. Do not repeat earlier wording or re-offer something they already ignored."
+            ."\nGOAL: be genuinely helpful. Only when the visitor clearly shows buying intent, or asks, offer a test drive, inspection or callback - never in every reply. If they decline, respect it and keep helping."
             ."\nCOLLECTING DETAILS: the visitor's name, mobile and email are ALREADY verified - never ask for them. Ask only what is missing, one thing at a time. Test drive / inspection needs: which car (a number from Shown, or a name), date, time slot (morning 9-12, afternoon 12-4, evening 4-8), at the showroom or at their address (then the address). Any other enquiry (price/on-road, EMI or loan, exchange, selling their car, brochure, callback) needs: what they want, plus city, budget and best time to call when relevant."
             ."\nSAVING: only when you have everything AND the visitor has said yes/confirmed, end your reply with ONE last line, in exactly this format and nothing after it (omit keys you do not need):\n"
             .'[[LEAD {"kind":"test_drive|inspection|enquiry","car":2,"date":"YYYY-MM-DD","slot":"morning|afternoon|evening","place":"showroom|home","address":"","topic":"","city":"","budget":"","callback":"","note":""}]]'

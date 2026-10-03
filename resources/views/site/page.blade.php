@@ -35,7 +35,7 @@
 
 @section('content')
 @if ($preview)<div class="alert alert-ok" style="margin:0;border-radius:0;text-align:center">Preview — this page is {{ $page->is_live ? 'live' : 'not published yet' }}.</div>@endif
-<div class="phead"><div class="w"><h1 class="h">{{ $page->title }}</h1>@if ($page->excerpt)<p>{{ $page->excerpt }}</p>@endif</div></div>
+@include('site.partials.crumb', ['title' => $page->title, 'trail' => []])
 @if ($page->show_ads && $homeSettings)@include('site.partials.ad-horizontal', ['ads' => $homeSettings->adsFor('horizontal')])@endif
 
 @php

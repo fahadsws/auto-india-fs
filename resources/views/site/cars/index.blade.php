@@ -3,7 +3,7 @@
 @section('description', 'Browse verified used cars by brand, fuel, budget and city, and send an enquiry in one tap.')
 
 @section('content')
-<div class="phead"><div class="w"><h1 class="h">Used Cars</h1><p>{{ $listings->total() }} car(s) available. Enquire and our team gets back to you fast.</p></div></div>
+@include('site.partials.crumb', ['title' => 'Used Cars', 'trail' => [], 'tag' => $listings->total().' car(s) available'])
 <div class="w fx-layout">
   @include('site.partials.sidebar', ['filters' => $filters, 'clear' => route('cars.index'), 'adPage' => 'used'])
   <div class="fx-main">
